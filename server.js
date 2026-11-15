@@ -15,6 +15,7 @@ const { ensureSuperAdminActiveSchema } = require('./server/db/migrations/super-a
 const { ensureFinancialMonthCloseSchema, ensureFinancialExceptionWorkflowSchema } = require('./server/db/migrations/financial-month-close');
 const { ensureFinancialExceptionAlertSchema } = require('./server/db/migrations/financial-exception-alerts');
 const { ensureFinancialReconciliationQueueIndex } = require('./server/db/migrations/financial-reconciliation-queue-index');
+const { ensureFinancialReconciliationAssignmentIndex } = require('./server/db/migrations/financial-reconciliation-assignment-index');
 const { ensureProviderEventQueueIndexes } = require('./server/db/migrations/provider-event-queue-indexes');
 const { isLoginLocked, recordLoginAttempt, resetLoginAttempts, cancelLoginAttempt } = createLoginRateLimiter({ getAsync, runAsync, withTransaction });
 const scanSessionRateLimiter = createScanSessionRateLimiter({ getAsync, runAsync, withTransaction });
@@ -828,13 +829,6 @@ async function initDatabase() {
   `);
 
 
-  // Fail closed if legacy rows already violate one-to-one journal assignment.
-  const duplicateJournalAssignment = await getAsync(
-    'SELECT matched_journal_transaction_id, COUNT(*) AS assignment_count FROM financial_reconciliation_items WHERE matched_journal_transaction_id IS NOT NULL GROUP BY matched_journal_transaction_id HAVING COUNT(*) > 1 LIMIT 1'
-  );
-  if (duplicateJournalAssignment) {
-    throw new Error('financial reconciliation has duplicate journal assignments; resolve them before enabling finance review');
-  }
   const reconciliationItemColumns = await allAsync('SHOW COLUMNS FROM financial_reconciliation_items');
   const reconciliationItemColumnNames = reconciliationItemColumns.map(column => column.Field);
   if (!reconciliationItemColumnNames.includes('exception_category')) {
@@ -843,10 +837,9 @@ async function initDatabase() {
   if (!reconciliationItemColumnNames.includes('exception_note')) {
     await runAsync('ALTER TABLE financial_reconciliation_items ADD COLUMN exception_note VARCHAR(500) DEFAULT NULL');
   }
-  const reconciliationItemIndexes = await allAsync('SHOW INDEX FROM financial_reconciliation_items');
-  if (!reconciliationItemIndexes.some(index => index.Key_name === 'unique_reconciliation_journal_assignment')) {
-    await runAsync('CREATE UNIQUE INDEX unique_reconciliation_journal_assignment ON financial_reconciliation_items (matched_journal_transaction_id)');
-  }
+
+  // Validate the actual one-to-one constraint on populated legacy databases.
+  await ensureFinancialReconciliationAssignmentIndex({ runAsync, getAsync, allAsync });
 
   // Add the tenant-scoped cursor index through an explicit, legacy-safe migration.
   await ensureFinancialReconciliationQueueIndex({ runAsync, allAsync });
