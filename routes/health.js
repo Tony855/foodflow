@@ -25,5 +25,4 @@ module.exports = function registerHealthRoute(app, { getPool, getClusterReadines
   // Keep /health canonical and retain aliases for older monitors.
   app.get('/health', readinessHandler);
   app.get('/api/health/ready', readinessHandler);
-  app.get('/api/health', readinessHandler);
 };
