@@ -278,6 +278,7 @@ module.exports = function(app, deps) {
   });
 
   app.put('/api/admin/telegram/notification-settings', requireAdminKey, requirePermission('can_manage_store'), async (req, res) => {
+    let failureStage = 'validate';
     try {
       const merchantId = Number(req.merchantId);
       const storeId = Number(req.storeId);
@@ -300,18 +301,23 @@ module.exports = function(app, deps) {
         return res.status(400).json({ error: 'Telegram Chat ID 无效' });
       }
 
+      failureStage = 'transaction_start';
       await withTransaction(async () => {
+        failureStage = 'merchant_lock';
         const merchant = await getAsync('SELECT id FROM merchants WHERE id=? AND status=1 FOR UPDATE', [merchantId]);
         if (!merchant) throw Object.assign(new Error('商户不存在或已停用'), { status: 403 });
+        failureStage = 'store_lock';
         const store = await getAsync('SELECT id FROM stores WHERE id=? AND merchant_id=? AND active=1 FOR UPDATE', [storeId, merchantId]);
         if (!store) throw Object.assign(new Error('门店不存在或已停用'), { status: 404 });
         if (enabled) {
+          failureStage = 'global_bot_check';
           const rows = await allAsync('SELECT `key`, value FROM settings WHERE `key` IN (?, ?)', ['telegram_admin_bot_enabled', 'telegram_admin_bot_token']);
           const stored = Object.fromEntries((Array.isArray(rows) ? rows : []).map(row => [row.key, row.value]));
           if (stored.telegram_admin_bot_enabled !== '1' || !validateBotToken(String(stored.telegram_admin_bot_token || ''))) {
             throw Object.assign(new Error('超级管理员尚未启用管理员 Telegram Bot'), { status: 409 });
           }
         }
+        failureStage = 'recipient_upsert';
         await runAsync(
           'INSERT INTO telegram_store_admin_recipients (merchant_id, store_id, chat_id, is_enabled, notify_order_created, notify_settled, notify_refunded, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE chat_id=VALUES(chat_id), is_enabled=VALUES(is_enabled), notify_order_created=VALUES(notify_order_created), notify_settled=VALUES(notify_settled), notify_refunded=VALUES(notify_refunded), updated_at=UTC_TIMESTAMP(3)',
           [merchantId, storeId, chatId, enabled, notifyOrderCreated, notifySettled, notifyRefunded]
@@ -320,6 +326,7 @@ module.exports = function(app, deps) {
         // A disabled store or event toggle is a terminal decision for queued
         // notices. Do this in the same transaction as the settings update so
         // re-enabling later cannot release an old backlog.
+        failureStage = 'outbox_suppression';
         if (!enabled) {
           await runAsync(
             "UPDATE telegram_notification_outbox SET state='dead', locked_by=NULL, locked_until=NULL, last_error_code='event_disabled', updated_at=UTC_TIMESTAMP(3) WHERE recipient_scope='merchant_store' AND merchant_id=? AND store_id=? AND state IN ('pending','processing')",
@@ -338,6 +345,7 @@ module.exports = function(app, deps) {
             );
           }
         }
+        failureStage = 'audit_write';
         await writeCurrencyAudit(req, 'update_telegram_store_notifications', storeId, {
           enabled: !!enabled,
           chat_id_configured: !!chatId,
@@ -349,6 +357,15 @@ module.exports = function(app, deps) {
       res.setHeader('Cache-Control', 'no-store, private');
       res.json({ success: true, enabled: !!enabled, chatId, notifyOrderCreated: !!notifyOrderCreated, notifySettled: !!notifySettled, notifyRefunded: !!notifyRefunded });
     } catch (error) {
+      if (!error.status) {
+        // Never log request bodies, Chat IDs, Bot tokens, SQL text, or raw error messages.
+        console.error('[telegram-store-notification-settings] save failed', {
+          stage: failureStage,
+          code: String(error.code || '').slice(0, 40),
+          errno: Number.isFinite(Number(error.errno)) ? Number(error.errno) : null,
+          sqlState: /^[0-9A-Z]{5}$/.test(String(error.sqlState || '')) ? error.sqlState : null
+        });
+      }
       res.status(error.status || 500).json({ error: error.status ? error.message : 'Telegram 门店通知设置保存失败，所有更改已回滚' });
     }
   });

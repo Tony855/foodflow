@@ -13,7 +13,7 @@ function response() {
     json(value) { this.body = value; return this; }
   };
 }
-function setup({ globalBotEnabled = '1', recipient = null, merchant = true, store = true } = {}) {
+function setup({ globalBotEnabled = '1', recipient = null, merchant = true, store = true, runError = null } = {}) {
   const routes = new Map();
   const calls = [];
   const app = {
@@ -36,7 +36,7 @@ function setup({ globalBotEnabled = '1', recipient = null, merchant = true, stor
       { key: 'telegram_admin_bot_enabled', value: globalBotEnabled },
       { key: 'telegram_admin_bot_token', value: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi' }
     ],
-    runAsync: async (sql, params) => { calls.push({ type: 'run', sql, params }); return { affectedRows: 1 }; },
+    runAsync: async (sql, params) => { calls.push({ type: 'run', sql, params }); if (runError && sql.includes(runError.match)) throw runError.error; return { affectedRows: 1 }; },
     withTransaction: async fn => fn(),
     requireAdminKey: pass,
     requirePermission: () => pass,
@@ -143,4 +143,32 @@ test('re-enabling store notifications does not revive dead-lettered backlog', as
   } }, enabled);
   assert.equal(enabled.statusCode, 200);
   assert.equal(calls.some(call => call.type === 'run' && call.sql.includes('UPDATE telegram_notification_outbox')), false);
+});
+
+
+test('unexpected store recipient database failures log only safe stage metadata', async () => {
+  const { routes } = setup({
+    runError: { match: 'INSERT INTO telegram_store_admin_recipients', error: Object.assign(new Error('sensitive database detail'), { code: 'ER_BAD_FIELD_ERROR', errno: 1054, sqlState: '42S22' }) }
+  });
+  const originalError = console.error;
+  const logs = [];
+  console.error = (...args) => logs.push(args);
+  try {
+    const res = response();
+    await routes.get('PUT /api/admin/telegram/notification-settings').at(-1)({
+      merchantId: 7, storeId: 9, adminId: 5,
+      body: { enabled: false, chatId: '7147843724' }
+    }, res);
+    assert.equal(res.statusCode, 500);
+    assert.match(res.body.error, /所有更改已回滚/);
+    assert.equal(logs.length, 1);
+    assert.equal(logs[0][0], '[telegram-store-notification-settings] save failed');
+    assert.deepEqual(logs[0][1], {
+      stage: 'recipient_upsert', code: 'ER_BAD_FIELD_ERROR', errno: 1054, sqlState: '42S22'
+    });
+    assert.equal(JSON.stringify(logs).includes('7147843724'), false);
+    assert.equal(JSON.stringify(logs).includes('sensitive database detail'), false);
+  } finally {
+    console.error = originalError;
+  }
 });
