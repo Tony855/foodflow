@@ -27,7 +27,6 @@ async function cashierUsernameExists(allAsync, username) {
 }
 
 module.exports = function(app, deps) {
-  const { getAsync, allAsync } = deps;
   async function assertWaiterStoreAccess(req, storeId) {
     if (!req.adminId || req.isPrimaryAdmin) return true;
     await assertAdminStoreAssignment({ allAsync, adminId: req.adminId, merchantId: req.merchantId, storeId: Number(storeId) });
