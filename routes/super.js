@@ -321,6 +321,7 @@ app.delete('/api/super/merchants/:id', requireSuperAdmin, async (req, res) => {
 
       // Remove sessions before administrator accounts, then merchant-scoped data.
       await runAsync('DELETE FROM admin_sessions WHERE admin_id IN (SELECT id FROM merchant_admins WHERE merchant_id=?)', [merchantId]);
+      await runAsync('DELETE FROM merchant_admin_store_access WHERE merchant_id=?', [merchantId]);
       await runAsync('DELETE FROM cashier_sessions WHERE merchant_id=?', [merchantId]);
       for (const sid of storeIds) {
         const storeSettingsPrefix = `store_${sid}_`;
