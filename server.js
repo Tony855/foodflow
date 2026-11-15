@@ -12,6 +12,7 @@ const { createScanSessionRateLimiter } = require('./server/services/scan-session
 const { createCooldownChecker } = require('./server/services/cooldown');
 const { migrateSessionTokenStorage } = require('./server/services/session-token');
 const { ensureSuperAdminActiveSchema } = require('./server/db/migrations/super-admin-active');
+const { ensureAdminStoreAccessSchema } = require('./server/db/migrations/admin-store-access');
 const { ensureFinancialMonthCloseSchema, ensureFinancialExceptionWorkflowSchema } = require('./server/db/migrations/financial-month-close');
 const { ensureFinancialExceptionAlertSchema } = require('./server/db/migrations/financial-exception-alerts');
 const { ensureFinancialReconciliationQueueIndex } = require('./server/db/migrations/financial-reconciliation-queue-index');
@@ -1198,6 +1199,8 @@ async function initDatabase() {
     }
   }
 
+  await ensureAdminStoreAccessSchema({ getAsync, runAsync, logger: console });
+
   // Finance reconciliation is sensitive and opt-in for non-primary administrators.
   try {
     await runAsync('ALTER TABLE merchant_admins ADD COLUMN can_manage_financial_reconciliation TINYINT NOT NULL DEFAULT 0');
@@ -1404,7 +1407,7 @@ require('./routes/public.js')(app, { getAsync, allAsync, runAsync });
 
 // ----- 商户管理员登录 -----
 // ----- 管理员登录 -----
-require('./routes/auth.js')(app, { getAsync, runAsync, isLoginLocked, recordLoginAttempt, resetLoginAttempts, cancelLoginAttempt, verifyPassword, getClientIp, getLocationByIp, requireAdminKey });
+require('./routes/auth.js')(app, { getAsync, allAsync, runAsync, isLoginLocked, recordLoginAttempt, resetLoginAttempts, cancelLoginAttempt, verifyPassword, getClientIp, getLocationByIp, requireAdminKey });
 
 
 // ===== 超级管理员登录 =====
