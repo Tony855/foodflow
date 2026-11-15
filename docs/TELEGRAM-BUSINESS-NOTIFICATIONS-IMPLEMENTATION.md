@@ -2,15 +2,11 @@
 
 ## Current status
 
-The feature branch now contains the main implementation for global super-admin, per-store admin, and customer Telegram notifications. Business events are inserted into a durable InnoDB outbox in the same transaction as the order/payment/refund change. A separate opt-in worker performs delivery with leases, bounded retries, dead-letter handling, retention cleanup, and graceful shutdown.
+The Telegram business-notification implementation was merged into `main` through [PR #266](https://github.com/Tony855/shaolafang/pull/266). Business events are inserted into a durable InnoDB outbox in the same transaction as the order/payment/refund change. A separate opt-in worker performs delivery with leases, bounded retries, dead-letter handling, retention cleanup, and graceful shutdown.
 
-**The worker is disabled by default.** No production notification delivery is active unless the deployment explicitly enables it.
+**The worker is disabled by default in the repository.** Production delivery requires an explicit environment flag, configured Bot profiles, recipients, and customer bindings. Enabling the worker alone does not create recipients or bind customers.
 
-The implementation is submitted as [draft PR #266](https://github.com/Tony855/shaolafang/pull/266), targeting `main`. The current branch head and mergeability are tracked directly on the PR page.
-
-The earlier CI run passed on commit `71d72ed1f4954a1e63cca01e1d9aace6139211a4` (Debian 12/13, Ubuntu 22.04/24.04/26.04, repository validation, full test suite, MySQL 8.4, and MariaDB 10.11/11.4/11.8/12.3). Subsequent hardening commits are running a fresh CI cycle; use the PR Checks tab for the current head.
-
-CI success does not replace real Telegram staging acceptance. No live Bot token or webhook secret is stored in the repository, and no real Telegram delivery has been exercised in staging during this implementation. The PR remains draft and has not been merged or deployed.
+Automated CI and database integration coverage passed on the merged implementation. This does not replace live Telegram staging acceptance: dedicated test Bots, Chat IDs, multiple stores, QR rebind/revoke, worker restart, and backup/restore still need to be exercised before treating the feature as production-accepted.
 
 ## Notification scopes and routing
 
@@ -109,9 +105,15 @@ The sample uses a placeholder domain; replace it with the actual HTTPS origin. P
 
 The worker's safe log messages identify a failed cleanup or batch without printing raw exception text. Operational alerting for sustained pending/dead-letter growth should be configured by the deployment operator; CI cannot verify production alert delivery.
 
+### Safe operational diagnostics
+
+Run `npm run telegram:diagnose` from the application root. The command reads the application's `.env`, checks the worker flag and webhook-secret length, reports whether the two Bot profiles and global Admin Chat ID are configured, counts active customer bindings and enabled store recipients, summarizes outbox states, and checks the Client Bot webhook with Telegram's `getWebhookInfo` API. It deliberately does not print Bot tokens, Chat IDs, webhook secrets, notification payloads, or raw database errors. If a notification table is missing, its section reports `available: false` rather than exposing database details.
+
+Interpret zero active customer bindings as customers not yet linked through the customer-page Telegram button and `/start` flow. Interpret zero enabled store recipients as stores not yet configured with their own Chat ID and event toggles. A registered webhook does not create either kind of recipient.
+
 ## Remaining acceptance work
 
 - Staging end-to-end delivery proof and restart/lease-recovery soak testing are still required. CI success does not replace Telegram delivery verification against real test Bots and Chat IDs.
 - Verify the production deployment environment has the webhook secret and worker flag configured before any rollout.
 - Review dead-letter operational monitoring/alerting with the deployment operator.
-- PR #266 remains a draft. No changes have been merged to `main`, and no production deployment has been performed.
+- PR #266 is merged. The end-to-end staging acceptance items above remain open and are tracked by [Issue #265](https://github.com/Tony855/shaolafang/issues/265). A successful webhook registration or green CI run alone is not evidence that customer and store notifications have been delivered.
