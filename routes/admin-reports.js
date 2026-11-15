@@ -48,7 +48,7 @@ module.exports = function(app, deps) {
   // 返回 { where, params, isAll }
   async function buildStoreWhere(req, scope) {
     if (scope === 'all') {
-      if (req.isPrimaryAdmin) {
+      if (req.isPrimaryAdmin !== false) {
         return { where: 'store_id IN (SELECT id FROM stores WHERE merchant_id=?)', params: [req.merchantId], isAll: true };
       }
       const assigned = await allAsync('SELECT store_id FROM merchant_admin_store_access WHERE admin_id=? AND merchant_id=?', [req.adminId, req.merchantId]);
