@@ -57,6 +57,9 @@ function setup({ storeCount = 1, currentStoreId = 2, firstStoreId = 1, dependent
       calls.push({ type: 'all', sql, inTransaction });
       if (sql.includes('FROM menus WHERE store_id=? AND merchant_id=?')) return sourceMenus;
       if (sql.includes('FROM menus WHERE store_id=?')) return existingMenus;
+      if (sql.includes('merchant_admin_store_access')) {
+        return Array.from({ length: storeCount }, (_, i) => ({ id: i === 0 ? firstStoreId : currentStoreId + i - 1, store_id: i === 0 ? firstStoreId : currentStoreId + i - 1 }));
+      }
       if (sql.includes('FROM stores WHERE merchant_id=?')) {
         return Array.from({ length: storeCount }, (_, i) => ({ id: i === 0 ? firstStoreId : currentStoreId + i - 1 }));
       }
