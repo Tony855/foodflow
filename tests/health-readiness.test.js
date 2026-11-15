@@ -7,9 +7,11 @@ const registerPublicRoutes = require('../routes/public');
 
 function buildApp() {
   const routes = new Map();
+  const registrations = [];
   return {
     routes,
-    get(path, handler) { routes.set(path, handler); }
+    registrations,
+    get(path, handler) { registrations.push({ path, handler }); routes.set(path, handler); }
   };
 }
 
@@ -100,7 +102,8 @@ test('readiness and liveness paths have a single owner each', () => {
   const app = buildApp();
   registerReadiness(app);
   registerPublicRoutes(app, { getAsync: async () => null, allAsync: async () => [] });
-  assert.equal(app.routes.size >= 2, true);
+  assert.equal(app.registrations.filter(route => route.path === '/api/health').length, 1);
+  assert.equal(app.registrations.filter(route => route.path === '/api/health/ready').length, 1);
   assert.equal(typeof app.routes.get('/api/health'), 'function');
   assert.equal(typeof app.routes.get('/api/health/ready'), 'function');
 });
