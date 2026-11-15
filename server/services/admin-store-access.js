@@ -26,6 +26,17 @@ function normalizeStoreIds(values) {
   if (ids.some(id => id === null) || new Set(ids).size !== ids.length) throw Object.assign(new Error('门店授权列表包含无效或重复编号'), { status: 400 });
   return ids;
 }
+async function assertAdminStoreAssignment({ allAsync, adminId, merchantId, storeId }) {
+  const rows = await allAsync(
+    'SELECT store_id FROM merchant_admin_store_access WHERE admin_id=? AND merchant_id=? AND store_id=?',
+    [adminId, merchantId, storeId]
+  );
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw Object.assign(new Error('当前管理员未获授权管理该门店'), { status: 403 });
+  }
+  return true;
+}
+
 async function assertActorCanAssignStores({ getAsync, allAsync, actorAdminId, merchantId, storeIds }) {
   if (!actorAdminId) throw Object.assign(new Error('缺少管理员身份，不能分配门店权限'), { status: 403 });
   const primary = await getAsync('SELECT MIN(id) AS min_id FROM merchant_admins WHERE merchant_id=?', [merchantId]);
@@ -49,4 +60,4 @@ async function replaceAdminStoreAccess({ runAsync, allAsync, adminId, merchantId
   for (const storeId of ids) await runAsync('INSERT INTO merchant_admin_store_access (merchant_id, admin_id, store_id, created_at) VALUES (?, ?, ?, NOW(3))', [merchantId, adminId, storeId]);
   return ids;
 }
-module.exports = { resolveAdminStoreAccess, normalizeStoreIds, assertActorCanAssignStores, replaceAdminStoreAccess };
+module.exports = { resolveAdminStoreAccess, normalizeStoreIds, assertAdminStoreAssignment, assertActorCanAssignStores, replaceAdminStoreAccess };
