@@ -237,7 +237,6 @@ module.exports = function(app, deps) {
       await withTransaction(async () => {
         const merchant = await getAsync('SELECT id FROM merchants WHERE id=? AND status=1 FOR UPDATE', [merchantId]);
         if (!merchant) throw Object.assign(new Error('商户不存在或已停用'), { status: 403 });
-        failureStage = 'store_lock';
         const store = await getAsync('SELECT id FROM stores WHERE id=? AND merchant_id=? AND active=1 FOR UPDATE', [storeId, merchantId]);
         if (!store) throw Object.assign(new Error('门店不存在或已停用'), { status: 404 });
         await runAsync(
