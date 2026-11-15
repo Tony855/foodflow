@@ -208,3 +208,12 @@ test('cashier update and delete reject non-canonical cashier route IDs before tr
     assert.equal(deletion.transactionCount, 0);
   }
 });
+
+
+test('sub-admin cannot update a cashier in a store outside their assignment', async () => {
+  const ctx = setup({ initialCashiers: { 2: JSON.stringify([{ id: 77, username: 'cashier', display_name: 'Cashier', active: true, permissions: {} }]) } });
+  const res = response();
+  await ctx.updateHandler({ merchantId: 5, adminId: 9, isPrimaryAdmin: false, params: { id: '77' }, body: { display_name: 'Blocked' } }, res);
+  assert.equal(res.statusCode, 403);
+  assert.equal(ctx.calls.some(call => call.type === 'run' && call.sql.startsWith('INSERT INTO settings')), false);
+});
