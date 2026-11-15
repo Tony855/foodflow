@@ -53,13 +53,13 @@ function setup({ storeCount = 1, currentStoreId = 2, firstStoreId = 1, dependent
       }
       return null;
     },
-    allAsync: async (sql) => {
+    allAsync: async (sql, params = []) => {
       calls.push({ type: 'all', sql, inTransaction });
       if (sql.includes('FROM menus WHERE store_id=? AND merchant_id=?')) return sourceMenus;
       if (sql.includes('FROM menus WHERE store_id=?')) return existingMenus;
       if (sql.includes('merchant_admin_store_access')) {
         const ids = assignedStoreIds || Array.from({ length: storeCount }, (_, i) => i === 0 ? firstStoreId : currentStoreId + i - 1);
-        return ids.map(id => ({ id, store_id: id }));
+        return ids.filter(id => params.length < 3 || Number(id) === Number(params[2])).map(id => ({ id, store_id: id }));
       }
       if (sql.includes('FROM stores WHERE merchant_id=?')) {
         return Array.from({ length: storeCount }, (_, i) => ({ id: i === 0 ? firstStoreId : currentStoreId + i - 1 }));
