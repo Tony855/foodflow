@@ -1413,7 +1413,7 @@ require('./routes/super.js')(app, { getAsync, runAsync, allAsync, isLoginLocked,
 
 
 // ----- 系统日志+登出+改密码 -----
-require('./routes/admin-system.js')(app, { getAsync, allAsync, runAsync, requireAdminKey, requirePermission, verifyPassword, hashPassword, logAudit, getClientIp });
+require('./routes/admin-system.js')(app, { getAsync, allAsync, runAsync, withTransaction, requireAdminKey, requirePermission, verifyPassword, hashPassword, logAudit, getClientIp });
 
 
 // ----- 服务员登录 -----
@@ -1434,7 +1434,7 @@ require('./routes/calls.js')(app, { getAsync, runAsync, allAsync, requireAdminKe
 
 // ----- 订单打印 -----
 // ----- 打印机+打印路由 -----
-require('./routes/admin-printers.js')(app, { getAsync, allAsync, runAsync, requireAdminKey, requirePermission, requireAdminOrWaiter, formatOrder, buildReceipt, buildKitchenTicket, printToNetworkPrinter, dispatchPrint, EscPosBuilder, formatGlobalDateTime, getClientIp });
+require('./routes/admin-printers.js')(app, { getAsync, allAsync, runAsync, withTransaction, requireAdminKey, requirePermission, requireAdminOrWaiter, formatOrder, buildReceipt, buildKitchenTicket, printToNetworkPrinter, dispatchPrint, EscPosBuilder, formatGlobalDateTime, getClientIp });
 
 
 // ----- 数据导出 -----
