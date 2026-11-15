@@ -634,6 +634,7 @@ module.exports = function(app, deps) {
         if (!merchant) throw Object.assign(new Error('商户不存在或已停用'), { status: 403 });
         const found = await findCashierStore(merchantId, id, true);
         if (!found) throw Object.assign(new Error('收银员不存在'), { status: 404 });
+        await assertCashierStoreAccess(req, Number(found.store.id));
         const { store, list, idx } = found;
         const cashier = list[idx];
         await runAsync('DELETE FROM cashier_sessions WHERE cashier_id=? AND merchant_id=?', [id, merchantId]);
