@@ -3,6 +3,7 @@
    ============================================================ */
 const { hashPassword, verifyPassword, needsRehash } = require('../middleware/password');
 const { hasCorruptFinancialAmounts } = require('./order-financial');
+const { getAsync } = require('../db/helpers');
 
 function formatOrder(row) {
   let items = row.items;
