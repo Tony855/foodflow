@@ -190,7 +190,12 @@ module.exports = function(app, deps) {
         }
 
         const stores = applyAll
-          ? await allAsync('SELECT id FROM stores WHERE merchant_id=? ORDER BY id FOR UPDATE', [merchantId])
+          ? (req.isPrimaryAdmin
+            ? await allAsync('SELECT id FROM stores WHERE merchant_id=? ORDER BY id FOR UPDATE', [merchantId])
+            : await allAsync(
+                'SELECT s.id FROM merchant_admin_store_access a JOIN stores s ON s.id=a.store_id AND s.merchant_id=a.merchant_id WHERE a.merchant_id=? AND a.admin_id=? AND s.active=1 ORDER BY s.id FOR UPDATE',
+                [merchantId, req.adminId]
+              ))
           : [{ id: sid }];
         for (const store of stores) {
           await runAsync(
