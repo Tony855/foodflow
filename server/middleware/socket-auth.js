@@ -2,7 +2,6 @@
 
 const { hashSessionToken } = require('../services/session-token');
 const { safeErrorMetadata } = require('./safe-error-metadata');
-const { allAsync: defaultAllAsync } = require('../db/helpers');
 const { resolveAdminStoreAccess } = require('../services/admin-store-access');
 
 function isLiveSession(session) {
@@ -16,7 +15,7 @@ function positiveSafeInteger(value) {
   return Number.isSafeInteger(number) && number > 0 ? number : null;
 }
 
-function createSocketAuthenticator({ getAsync, allAsync = defaultAllAsync, logger = console }) {
+function createSocketAuthenticator({ getAsync, allAsync = async (sql, params) => { const result = await getAsync(sql, params); return Array.isArray(result) ? result : (result ? [result] : []); }, logger = console }) {
   if (typeof getAsync !== 'function') throw new TypeError('getAsync is required');
 
   return async function authenticateSocket(socket, next) {
@@ -118,7 +117,7 @@ function createSocketAuthenticator({ getAsync, allAsync = defaultAllAsync, logge
           const requestedStoreId = rawStoreId === undefined || rawStoreId === null || rawStoreId === '' ? null : positiveSafeInteger(rawStoreId);
           if (rawStoreId !== undefined && rawStoreId !== null && rawStoreId !== '' && !requestedStoreId) return next(new Error('unauthorized: invalid store id'));
           const storeAccess = await resolveAdminStoreAccess({ getAsync, allAsync, adminId: admin.id, merchantId: admin.merchant_id, requestedStoreId });
-          if (storeAccess.error) return next(new Error('unauthorized: ' + storeAccess.code.toLowerCase()));
+          if (storeAccess.error) return next(new Error(storeAccess.code === 'NO_ASSIGNED_ACTIVE_STORE' ? 'unauthorized: no active store assigned' : 'unauthorized: ' + storeAccess.code.toLowerCase()));
           const storeId = positiveSafeInteger(storeAccess.storeId);
           if (!storeId) return next(new Error('unauthorized: no active store'));
           socket.data.role = 'admin';
