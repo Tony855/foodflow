@@ -26,6 +26,21 @@ function normalizeStoreIds(values) {
   if (ids.some(id => id === null) || new Set(ids).size !== ids.length) throw Object.assign(new Error('门店授权列表包含无效或重复编号'), { status: 400 });
   return ids;
 }
+async function assertTargetAdminInActorScope({ getAsync, allAsync, actorAdminId, targetAdminId, merchantId }) {
+  const primary = await getAsync('SELECT MIN(id) AS min_id FROM merchant_admins WHERE merchant_id=?', [merchantId]);
+  if (Number(primary?.min_id) === Number(actorAdminId)) return true;
+  if (Number(primary?.min_id) === Number(targetAdminId)) return true;
+  const [actorRows, targetRows] = await Promise.all([
+    allAsync('SELECT store_id FROM merchant_admin_store_access WHERE admin_id=? AND merchant_id=?', [actorAdminId, merchantId]),
+    allAsync('SELECT store_id FROM merchant_admin_store_access WHERE admin_id=? AND merchant_id=?', [targetAdminId, merchantId])
+  ]);
+  const actorStores = new Set((actorRows || []).map(row => Number(row.store_id)));
+  if (!(targetRows || []).some(row => actorStores.has(Number(row.store_id)))) {
+    throw Object.assign(new Error('不能管理授权范围之外的管理员账号'), { status: 403 });
+  }
+  return true;
+}
+
 async function assertAdminStoreAssignment({ allAsync, adminId, merchantId, storeId }) {
   const rows = await allAsync(
     'SELECT store_id FROM merchant_admin_store_access WHERE admin_id=? AND merchant_id=? AND store_id=?',
@@ -60,4 +75,4 @@ async function replaceAdminStoreAccess({ runAsync, allAsync, adminId, merchantId
   for (const storeId of ids) await runAsync('INSERT INTO merchant_admin_store_access (merchant_id, admin_id, store_id, created_at) VALUES (?, ?, ?, NOW(3))', [merchantId, adminId, storeId]);
   return ids;
 }
-module.exports = { resolveAdminStoreAccess, normalizeStoreIds, assertAdminStoreAssignment, assertActorCanAssignStores, replaceAdminStoreAccess };
+module.exports = { resolveAdminStoreAccess, normalizeStoreIds, assertAdminStoreAssignment, assertTargetAdminInActorScope, assertActorCanAssignStores, replaceAdminStoreAccess };
