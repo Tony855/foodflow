@@ -88,6 +88,8 @@ async function normalizeOrderItems(items, storeId) {
 async function assertTableExists(table, storeId) {
   const normalized = String(table || '').trim();
   if (!normalized) throw new Error('请选择桌号');
+  // Load the DB helper lazily so importing this module does not initialize DB config.
+  const { getAsync } = require('../db/helpers');
   const existing = await getAsync('SELECT t.name FROM tables t JOIN stores s ON s.id=t.store_id WHERE t.name = ? AND t.store_id = ? AND s.active=1', [normalized, storeId || 1]);
   if (!existing) throw new Error('桌号不存在');
   return normalized;
