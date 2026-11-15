@@ -6,7 +6,7 @@ const { hashSessionToken } = require('../server/services/session-token');
 const QRCode = require('qrcode');
 const { parsePositiveRouteId } = require('../server/services/route-id');
 const { safeErrorMetadata } = require('../server/middleware/safe-error-metadata');
-const { replaceAdminStoreAccess, normalizeStoreIds, assertActorCanAssignStores, assertAdminStoreAssignment } = require('../server/services/admin-store-access');
+const { replaceAdminStoreAccess, normalizeStoreIds, assertActorCanAssignStores, assertAdminStoreAssignment, assertTargetAdminInActorScope } = require('../server/services/admin-store-access');
 const { enqueueSystemAdminTelegramNotification, enqueueCustomerTelegramNotification, enqueueStoreAdminTelegramNotification } = require('../server/services/telegram-notification-enqueue');
 
 function normalizeAdminFlag(value, fallback, field) {
@@ -205,6 +205,12 @@ module.exports = function(app, deps) {
   });
 
   // ----- 商户管理员管理 -----
+  async function assertManagedAdminScope(req, targetAdminId, merchantId) {
+    if (!req.adminId || req.isPrimaryAdmin !== false) return true;
+    await assertTargetAdminInActorScope({ getAsync, allAsync, actorAdminId: req.adminId, targetAdminId, merchantId });
+    return true;
+  }
+
   app.get('/api/admin/admins', requireAdminKey, requirePermission('can_manage_admin'), async (req, res) => {
     try {
       const rows = await allAsync('SELECT id, username, display_name, active, last_login_at, created_at, (id = (SELECT MIN(id) FROM merchant_admins ma2 WHERE ma2.merchant_id = merchant_admins.merchant_id)) AS is_primary, can_manage_menu, can_manage_table, can_manage_order, can_delete_order, can_edit_order, can_manage_store, can_manage_waiter, can_manage_currency, can_manage_printer, can_manage_admin, can_view_logs, can_manage_cashier, can_manage_financial_reconciliation FROM merchant_admins WHERE merchant_id=? ORDER BY id', [req.merchantId]);
@@ -215,7 +221,13 @@ module.exports = function(app, deps) {
         list.push(Number(item.store_id));
         byAdmin.set(Number(item.admin_id), list);
       }
-      res.json(rows.map(row => ({ ...row, all_store_access: Number(row.is_primary) === 1,
+      const actorStoreIds = req.isPrimaryAdmin === false
+        ? new Set(assignments.filter(item => Number(item.admin_id) === Number(req.adminId)).map(item => Number(item.store_id)))
+        : null;
+      const visibleRows = actorStoreIds
+        ? rows.filter(row => Number(row.is_primary) === 1 || (byAdmin.get(Number(row.id)) || []).some(id => actorStoreIds.has(id)))
+        : rows;
+      res.json(visibleRows.map(row => ({ ...row, all_store_access: Number(row.is_primary) === 1,
         store_ids: Number(row.is_primary) === 1 ? null : (byAdmin.get(Number(row.id)) || []) })));
     } catch (e) { const status = Number.isInteger(e.status) && e.status >= 400 && e.status < 500 ? e.status : 500;
       res.status(status).json({ error: status === 500 ? '请求失败，请稍后重试' : e.message }); }
@@ -297,6 +309,7 @@ module.exports = function(app, deps) {
         if (!merchant) throw Object.assign(new Error('商户不存在或已停用'), { status: 403 });
         const admin = await getAsync('SELECT * FROM merchant_admins WHERE id=? AND merchant_id=? FOR UPDATE', [id, merchantId]);
         if (!admin) throw Object.assign(new Error('管理员不存在'), { status: 404 });
+        await assertManagedAdminScope(req, id, merchantId);
         const primary = await getAsync('SELECT MIN(id) AS min_id FROM merchant_admins WHERE merchant_id=?', [merchantId]);
         if (Number(primary?.min_id) === id) throw Object.assign(new Error('主管理员拥有全部权限，不可修改权限和状态'), { status: 400 });
 
@@ -363,6 +376,7 @@ module.exports = function(app, deps) {
         if (!merchant) throw Object.assign(new Error('商户不存在或已停用'), { status: 403 });
         const admin = await getAsync('SELECT id, username FROM merchant_admins WHERE id=? AND merchant_id=? FOR UPDATE', [id, merchantId]);
         if (!admin) throw Object.assign(new Error('管理员不存在'), { status: 404 });
+        await assertManagedAdminScope(req, id, merchantId);
         const primary = await getAsync('SELECT MIN(id) AS min_id FROM merchant_admins WHERE merchant_id=?', [merchantId]);
         if (Number(primary?.min_id) === id) throw Object.assign(new Error('主管理员不可删除'), { status: 400 });
         await runAsync('DELETE FROM admin_sessions WHERE admin_id=?', [id]);
