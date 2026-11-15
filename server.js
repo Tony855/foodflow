@@ -1479,7 +1479,7 @@ app.use(createSafeErrorHandler({ logger: console }));
 // ============================================================
 //  Socket.io 握手鉴权
 // ============================================================
-const socketAuthenticator = createSocketAuthenticator({ getAsync, logger: console });
+const socketAuthenticator = createSocketAuthenticator({ getAsync, allAsync, logger: console });
 io.use(socketAuthenticator);
 io.on('connection', (socket) => {
   // Re-check persisted session state while connected; disconnect immediately on
