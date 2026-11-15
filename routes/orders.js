@@ -354,6 +354,7 @@ app.post('/api/orders', async (req, res) => {
     if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) req.body = {};
     // ---------- 1. 认证 ----------
     const adminAuth = await authenticateAdmin(req);
+    if (adminAuth && adminAuth.error) return res.status(adminAuth.status || 401).json({ error: adminAuth.error, code: adminAuth.code });
     const isAdmin = Boolean(adminAuth && !adminAuth.error);
     if (isAdmin) {
       req.adminId = adminAuth.adminId || null;

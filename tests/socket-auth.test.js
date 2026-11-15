@@ -8,8 +8,8 @@ function makeSocket(token, storeId) {
   return { handshake: { auth: { token }, query: { ...(storeId === undefined ? {} : { storeId }) } }, data: {} };
 }
 
-async function authenticate(getAsync, socket) {
-  const middleware = createSocketAuthenticator({ getAsync, logger: { error() {} } });
+async function authenticate(getAsync, socket, allAsync = async () => []) {
+  const middleware = createSocketAuthenticator({ getAsync, allAsync, logger: { error() {} } });
   let error = null;
   await middleware(socket, value => { error = value || null; });
   return error;
@@ -76,7 +76,7 @@ test('admin socket rejects malformed or foreign store selection', async () => {
   const malformed = await authenticate(getAsync, makeSocket('admin-token', '1abc'));
   assert.match(malformed.message, /invalid store id/);
   const foreign = await authenticate(getAsync, makeSocket('admin-token', '1'));
-  assert.match(foreign.message, /not owned/);
+  assert.match(foreign.message, /store_not_assigned/);
 });
 
 test('waiter and cashier sockets require active store membership', async () => {
@@ -228,4 +228,32 @@ test('socket authentication logs safe metadata without exposing database driver 
   assert.equal(nextError.message, 'auth failed');
   assert.equal(JSON.stringify(logs).includes('sensitive database connection details'), false);
   assert.deepEqual(logs[0][1], { name: 'Error' });
+});
+
+
+test('admin socket rejects a same-merchant store that is not assigned to the sub-admin', async () => {
+  const expires = new Date(Date.now() + 60000).toISOString();
+  const error = await authenticate(async sql => {
+    if (sql.includes('FROM scan_sessions') || sql.includes('FROM waiter_sessions') || sql.includes('FROM cashier_sessions')) return null;
+    if (sql.includes('FROM admin_sessions')) return { admin_id: 5, expires_at: expires };
+    if (sql.includes('FROM merchant_admins')) return { id: 5, merchant_id: 88 };
+    if (sql.includes('FROM merchants')) return { id: 88 };
+    if (sql.includes('MIN(id)')) return { min_id: 1 };
+    return null;
+  }, makeSocket('admin-token', '9'), async () => []);
+  assert.match(error.message, /store_not_assigned/);
+});
+test('admin socket defaults a sub-admin to the first assigned active store', async () => {
+  const socket = makeSocket('admin-token');
+  const expires = new Date(Date.now() + 60000).toISOString();
+  const error = await authenticate(async sql => {
+    if (sql.includes('FROM scan_sessions') || sql.includes('FROM waiter_sessions') || sql.includes('FROM cashier_sessions')) return null;
+    if (sql.includes('FROM admin_sessions')) return { admin_id: 5, expires_at: expires };
+    if (sql.includes('FROM merchant_admins')) return { id: 5, merchant_id: 88 };
+    if (sql.includes('FROM merchants')) return { id: 88 };
+    if (sql.includes('MIN(id)')) return { min_id: 1 };
+    return null;
+  }, socket, async sql => sql.includes('merchant_admin_store_access') ? [{ id: 9, store_id: 9 }] : []);
+  assert.equal(error, null);
+  assert.equal(socket.data.storeId, 9);
 });

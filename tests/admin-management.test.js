@@ -14,7 +14,7 @@ function response() {
   };
 }
 
-function setup({ failAudit = false, primaryId = 1 } = {}) {
+function setup({ failAudit = false, primaryId = 9 } = {}) {
   let createHandler;
   let updateHandler;
   let deleteHandler;
@@ -44,7 +44,7 @@ function setup({ failAudit = false, primaryId = 1 } = {}) {
       if (sql.includes('SELECT id, username, display_name, active')) return { id: Number(params[0]), username: 'secondary', active: 1 };
       return null;
     },
-    allAsync: async () => [],
+    allAsync: async (sql, params = []) => sql.includes('FROM stores WHERE merchant_id=?') ? params.slice(1).map(id => ({ id })) : [],
     runAsync: async (sql, params = []) => {
       calls.push({ type: 'run', sql, params, inTransaction });
       if (failAudit && sql.startsWith('INSERT INTO audit_logs')) throw new Error('audit failure');
@@ -78,7 +78,7 @@ test('admin creation and audit are atomic and defaults the account to active', a
   const ctx = setup();
   const res = response();
   await ctx.createHandler({
-    merchantId: 5, adminId: 9,
+    merchantId: 5, adminId: 9, storeId: 6,
     body: { username: 'new-admin', password: 'long-password-123', display_name: 'New Admin' }
   }, res);
 
@@ -87,6 +87,7 @@ test('admin creation and audit are atomic and defaults the account to active', a
   const insert = ctx.calls.find(call => call.type === 'run' && call.sql.startsWith('INSERT INTO merchant_admins'));
   assert.ok(insert);
   assert.equal(insert.params[4], 1);
+  assert.ok(ctx.calls.some(call => call.type === 'run' && call.sql.startsWith('INSERT INTO merchant_admin_store_access')));
   assert.ok(ctx.calls.some(call => call.type === 'run' && call.sql.startsWith('INSERT INTO audit_logs') && call.inTransaction));
 });
 

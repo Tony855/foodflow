@@ -50,14 +50,15 @@ async function loadStores() {
     const adminSelect = $('#adminStoreSelect');
     const waiterSelect = $('#waiterStoreSelect');
     const editWaiterStore = $('#editWaiterStore');
-    if (rows.length) {
-      const optionsHtml = rows.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+    const activeRows = rows.filter(store => Number(store.active) === 1);
+    if (activeRows.length) {
+      const optionsHtml = activeRows.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
       adminSelect.innerHTML = optionsHtml;
       waiterSelect.innerHTML = optionsHtml;
       editWaiterStore.innerHTML = optionsHtml;
       window._adminStores = rows;
       const savedId = SLF.store.rawGetSession('adminStoreId') || SLF.store.rawGet('storeId') || '';
-      if (rows.some(r => String(r.id) === savedId)) {
+      if (activeRows.some(r => String(r.id) === savedId)) {
         adminSelect.value = savedId;
       } else {
         adminSelect.value = rows[0].id;

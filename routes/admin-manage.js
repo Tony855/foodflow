@@ -6,6 +6,7 @@ const { hashSessionToken } = require('../server/services/session-token');
 const QRCode = require('qrcode');
 const { parsePositiveRouteId } = require('../server/services/route-id');
 const { safeErrorMetadata } = require('../server/middleware/safe-error-metadata');
+const { replaceAdminStoreAccess, normalizeStoreIds, assertActorCanAssignStores, assertAdminStoreAssignment, assertTargetAdminInActorScope } = require('../server/services/admin-store-access');
 const { enqueueSystemAdminTelegramNotification, enqueueCustomerTelegramNotification, enqueueStoreAdminTelegramNotification } = require('../server/services/telegram-notification-enqueue');
 
 function normalizeAdminFlag(value, fallback, field) {
@@ -204,10 +205,30 @@ module.exports = function(app, deps) {
   });
 
   // ----- 商户管理员管理 -----
+  async function assertManagedAdminScope(req, targetAdminId, merchantId) {
+    if (!req.adminId || req.isPrimaryAdmin !== false) return true;
+    await assertTargetAdminInActorScope({ getAsync, allAsync, actorAdminId: req.adminId, targetAdminId, merchantId });
+    return true;
+  }
+
   app.get('/api/admin/admins', requireAdminKey, requirePermission('can_manage_admin'), async (req, res) => {
     try {
       const rows = await allAsync('SELECT id, username, display_name, active, last_login_at, created_at, (id = (SELECT MIN(id) FROM merchant_admins ma2 WHERE ma2.merchant_id = merchant_admins.merchant_id)) AS is_primary, can_manage_menu, can_manage_table, can_manage_order, can_delete_order, can_edit_order, can_manage_store, can_manage_waiter, can_manage_currency, can_manage_printer, can_manage_admin, can_view_logs, can_manage_cashier, can_manage_financial_reconciliation FROM merchant_admins WHERE merchant_id=? ORDER BY id', [req.merchantId]);
-      res.json(rows);
+      const assignments = await allAsync('SELECT admin_id, store_id FROM merchant_admin_store_access WHERE merchant_id=? ORDER BY admin_id, store_id', [req.merchantId]);
+      const byAdmin = new Map();
+      for (const item of assignments) {
+        const list = byAdmin.get(Number(item.admin_id)) || [];
+        list.push(Number(item.store_id));
+        byAdmin.set(Number(item.admin_id), list);
+      }
+      const actorStoreIds = req.isPrimaryAdmin === false
+        ? new Set(assignments.filter(item => Number(item.admin_id) === Number(req.adminId)).map(item => Number(item.store_id)))
+        : null;
+      const visibleRows = actorStoreIds
+        ? rows.filter(row => Number(row.is_primary) === 1 || (byAdmin.get(Number(row.id)) || []).some(id => actorStoreIds.has(id)))
+        : rows;
+      res.json(visibleRows.map(row => ({ ...row, all_store_access: Number(row.is_primary) === 1,
+        store_ids: Number(row.is_primary) === 1 ? null : (byAdmin.get(Number(row.id)) || []) })));
     } catch (e) { const status = Number.isInteger(e.status) && e.status >= 400 && e.status < 500 ? e.status : 500;
       res.status(status).json({ error: status === 500 ? '请求失败，请稍后重试' : e.message }); }
   });
@@ -242,11 +263,14 @@ module.exports = function(app, deps) {
           [merchantId, username, hashPassword(password), displayName, active, ...permVals]
         );
         adminId = result.lastID;
+        const requestedStoreIds = body.store_ids === undefined ? [req.storeId] : normalizeStoreIds(body.store_ids);
+        await assertActorCanAssignStores({ getAsync, allAsync, actorAdminId: req.adminId, merchantId, storeIds: requestedStoreIds });
+        await replaceAdminStoreAccess({ runAsync, allAsync, adminId, merchantId, storeIds: requestedStoreIds });
         const actor = req.adminId ? await getAsync('SELECT username FROM merchant_admins WHERE id=? AND merchant_id=?', [req.adminId, merchantId]) : null;
         await runAsync(
           'INSERT INTO audit_logs (actor_type, actor_id, actor_username, action, target_type, target_id, details, ip, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
           ['merchant_admin', req.adminId || null, actor?.username || '', 'create_admin', 'merchant_admin', adminId,
-            JSON.stringify({ username, display_name: displayName, active }), getClientIp(req), new Date().toISOString()]
+            JSON.stringify({ username, display_name: displayName, active, store_ids: requestedStoreIds }), getClientIp(req), new Date().toISOString()]
         );
       });
       res.status(201).json(await getAsync(
@@ -277,6 +301,7 @@ module.exports = function(app, deps) {
       if (body.permissions !== undefined && (!body.permissions || typeof body.permissions !== 'object' || Array.isArray(body.permissions))) {
         return res.status(400).json({ error: '管理员权限配置格式无效' });
       }
+      const requestedStoreIds = body.store_ids === undefined ? undefined : normalizeStoreIds(body.store_ids);
       const permFields = ['can_manage_menu', 'can_manage_table', 'can_manage_order', 'can_delete_order', 'can_edit_order', 'can_manage_store', 'can_manage_waiter', 'can_manage_currency', 'can_manage_printer', 'can_manage_admin', 'can_view_logs', 'can_manage_cashier', 'can_manage_financial_reconciliation'];
       let updatedAdmin;
       await withTransaction(async () => {
@@ -284,6 +309,7 @@ module.exports = function(app, deps) {
         if (!merchant) throw Object.assign(new Error('商户不存在或已停用'), { status: 403 });
         const admin = await getAsync('SELECT * FROM merchant_admins WHERE id=? AND merchant_id=? FOR UPDATE', [id, merchantId]);
         if (!admin) throw Object.assign(new Error('管理员不存在'), { status: 404 });
+        await assertManagedAdminScope(req, id, merchantId);
         const primary = await getAsync('SELECT MIN(id) AS min_id FROM merchant_admins WHERE merchant_id=?', [merchantId]);
         if (Number(primary?.min_id) === id) throw Object.assign(new Error('主管理员拥有全部权限，不可修改权限和状态'), { status: 400 });
 
@@ -312,14 +338,20 @@ module.exports = function(app, deps) {
           values.push(id, merchantId);
           await runAsync('UPDATE merchant_admins SET ' + assignments.join(',') + ' WHERE id=? AND merchant_id=?', values);
         }
-        if (passwordChanged || (body.active !== undefined && active !== Number(admin.active)) || permissionsChanged) {
+        if (requestedStoreIds !== undefined) {
+          if (Number(primary?.min_id) === id) throw Object.assign(new Error('主管理员拥有全部门店权限，不可修改门店分配'), { status: 400 });
+          await assertActorCanAssignStores({ getAsync, allAsync, actorAdminId: req.adminId, merchantId, storeIds: requestedStoreIds });
+          await replaceAdminStoreAccess({ runAsync, allAsync, adminId: id, merchantId, storeIds: requestedStoreIds });
+          changedFields.push('store_ids');
+        }
+        if (passwordChanged || (body.active !== undefined && active !== Number(admin.active)) || permissionsChanged || requestedStoreIds !== undefined) {
           await runAsync('DELETE FROM admin_sessions WHERE admin_id=?', [id]);
         }
         const actor = req.adminId ? await getAsync('SELECT username FROM merchant_admins WHERE id=? AND merchant_id=?', [req.adminId, merchantId]) : null;
         await runAsync(
           'INSERT INTO audit_logs (actor_type, actor_id, actor_username, action, target_type, target_id, details, ip, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
           ['merchant_admin', req.adminId || null, actor?.username || '', 'update_admin', 'merchant_admin', id,
-            JSON.stringify({ username: admin.username, changed_fields: changedFields }),
+            JSON.stringify({ username: admin.username, changed_fields: changedFields, ...(requestedStoreIds === undefined ? {} : { store_ids: requestedStoreIds }) }),
             getClientIp(req), new Date().toISOString()]
         );
         updatedAdmin = await getAsync(
@@ -344,9 +376,11 @@ module.exports = function(app, deps) {
         if (!merchant) throw Object.assign(new Error('商户不存在或已停用'), { status: 403 });
         const admin = await getAsync('SELECT id, username FROM merchant_admins WHERE id=? AND merchant_id=? FOR UPDATE', [id, merchantId]);
         if (!admin) throw Object.assign(new Error('管理员不存在'), { status: 404 });
+        await assertManagedAdminScope(req, id, merchantId);
         const primary = await getAsync('SELECT MIN(id) AS min_id FROM merchant_admins WHERE merchant_id=?', [merchantId]);
         if (Number(primary?.min_id) === id) throw Object.assign(new Error('主管理员不可删除'), { status: 400 });
         await runAsync('DELETE FROM admin_sessions WHERE admin_id=?', [id]);
+        await runAsync('DELETE FROM merchant_admin_store_access WHERE admin_id=? AND merchant_id=?', [id, merchantId]);
         await runAsync('DELETE FROM merchant_admins WHERE id=? AND merchant_id=?', [id, merchantId]);
         const actor = req.adminId ? await getAsync('SELECT username FROM merchant_admins WHERE id=? AND merchant_id=?', [req.adminId, merchantId]) : null;
         await runAsync(
@@ -378,6 +412,21 @@ module.exports = function(app, deps) {
       "INSERT INTO settings (`key`, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value=VALUES(value)",
       ['cashiers_' + storeId, JSON.stringify(cashiers)]
     );
+  }
+
+  async function assertCashierStoreAccess(req, storeId) {
+    if (!req.adminId || req.isPrimaryAdmin !== false) return true;
+    await assertAdminStoreAssignment({ allAsync, adminId: req.adminId, merchantId: req.merchantId, storeId: Number(storeId) });
+    return true;
+  }
+
+  async function getCashiersVisibleToAdmin(req) {
+    const list = await getAllCashiersByMerchant(req.merchantId);
+    if (req.isPrimaryAdmin !== false) return list;
+    if (!req.adminId) return [];
+    const assignments = await allAsync('SELECT store_id FROM merchant_admin_store_access WHERE admin_id=? AND merchant_id=?', [req.adminId, req.merchantId]);
+    const allowed = new Set(assignments.map(row => Number(row.store_id)));
+    return list.filter(cashier => allowed.has(Number(cashier.store_id)));
   }
 
   async function getAllCashiersByMerchant(merchantId, forUpdate = false) {
@@ -438,7 +487,7 @@ module.exports = function(app, deps) {
 
   app.get('/api/admin/cashiers', requireAdminKey, requirePermission('can_manage_cashier'), async (req, res) => {
     try {
-      const list = await getAllCashiersByMerchant(req.merchantId);
+      const list = await getCashiersVisibleToAdmin(req);
       res.json({ cashiers: list });
     } catch (e) { const status = Number.isInteger(e.status) && e.status >= 400 && e.status < 500 ? e.status : 500;
       res.status(status).json({ error: status === 500 ? '请求失败，请稍后重试' : e.message }); }
@@ -468,6 +517,7 @@ module.exports = function(app, deps) {
         if (!merchant) throw Object.assign(new Error('商户不存在或已停用'), { status: 403 });
         const store = await getAsync('SELECT id, name FROM stores WHERE id=? AND merchant_id=? AND active=1 FOR UPDATE', [targetStoreId, merchantId]);
         if (!store) throw Object.assign(new Error('目标店铺不存在或已停用'), { status: 400 });
+        await assertCashierStoreAccess(req, targetStoreId);
         const all = await getAllCashiersByMerchant(merchantId, true);
         if (all.some(cashier => cashier.username === username)) {
           throw Object.assign(new Error('该商户下已存在同名收银员账号'), { status: 409 });
@@ -529,6 +579,7 @@ module.exports = function(app, deps) {
         if (!merchant) throw Object.assign(new Error('商户不存在或已停用'), { status: 403 });
         const found = await findCashierStore(merchantId, id, true);
         if (!found) throw Object.assign(new Error('收银员不存在'), { status: 404 });
+        await assertCashierStoreAccess(req, Number(found.store.id));
         const { store: oldStore, list: oldList, idx } = found;
         const cashier = { ...oldList[idx], permissions: { ...(oldList[idx].permissions || {}) } };
         const targetStoreId = requestedTargetStoreId === null ? parsePositiveRouteId(oldStore.id) : requestedTargetStoreId;
@@ -538,6 +589,7 @@ module.exports = function(app, deps) {
           ? await getAsync('SELECT id, name FROM stores WHERE id=? AND merchant_id=? AND active=1 FOR UPDATE', [targetStoreId, merchantId])
           : oldStore;
         if (!newStore) throw Object.assign(new Error('目标店铺不存在或已停用'), { status: 400 });
+        if (storeChanged) await assertCashierStoreAccess(req, targetStoreId);
 
         const previousActive = normalizeAdminFlag(cashier.active, 1, 'active') === 1;
         const active = normalizeAdminFlag(body.active, previousActive ? 1 : 0, 'active') === 1;
@@ -596,6 +648,7 @@ module.exports = function(app, deps) {
         if (!merchant) throw Object.assign(new Error('商户不存在或已停用'), { status: 403 });
         const found = await findCashierStore(merchantId, id, true);
         if (!found) throw Object.assign(new Error('收银员不存在'), { status: 404 });
+        await assertCashierStoreAccess(req, Number(found.store.id));
         const { store, list, idx } = found;
         const cashier = list[idx];
         await runAsync('DELETE FROM cashier_sessions WHERE cashier_id=? AND merchant_id=?', [id, merchantId]);
@@ -609,6 +662,7 @@ module.exports = function(app, deps) {
 
   app.post('/api/admin/reset-data', requireAdminKey, requirePermission('can_manage_store'), async (req, res) => {
     try {
+      if (req.isPrimaryAdmin === false) return res.status(403).json({ error: '数据重置仅允许主管理员操作' });
       const password = typeof req.body?.password === 'string' ? req.body.password : '';
       if (!password || password.length > 128) return res.status(400).json({ error: '请输入有效的管理员密码' });
       const merchantId = Number(req.merchantId);

@@ -8,6 +8,7 @@ module.exports = function(app, deps) {
 
   app.get('/api/admin/login-logs', requireAdminKey, requirePermission('can_view_logs'), async (req, res) => {
     try {
+      if (req.isPrimaryAdmin === false) return res.status(403).json({ error: '系统登录日志仅主管理员可查看，避免跨门店信息泄漏' });
       const merchantId = req.merchantId || 1;
       const rows = await allAsync('SELECT * FROM login_logs WHERE merchant_id = ? ORDER BY id DESC LIMIT 200', [merchantId]);
       res.json(rows);
@@ -16,6 +17,7 @@ module.exports = function(app, deps) {
 
   app.get('/api/admin/audit-logs', requireAdminKey, requirePermission('can_view_logs'), async (req, res) => {
     try {
+      if (req.isPrimaryAdmin === false) return res.status(403).json({ error: '系统审计日志仅主管理员可查看，避免跨门店信息泄漏' });
       const rows = await allAsync(
         "SELECT id, actor_type, actor_id, actor_username, action, target_type, target_id, details, ip, created_at FROM audit_logs WHERE actor_type='merchant_admin' AND actor_id IN (SELECT id FROM merchant_admins WHERE merchant_id=?) ORDER BY id DESC LIMIT 200",
         [req.merchantId]

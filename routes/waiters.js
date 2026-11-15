@@ -1,4 +1,5 @@
 const { parsePositiveRouteId } = require('../server/services/route-id');
+const { assertAdminStoreAssignment } = require('../server/services/admin-store-access');
 /* ============================================================
    routes/waiters.js — 服务员管理
    ============================================================ */
@@ -26,17 +27,27 @@ async function cashierUsernameExists(allAsync, username) {
 }
 
 module.exports = function(app, deps) {
+  async function assertWaiterStoreAccess(req, storeId) {
+    if (!req.adminId || req.isPrimaryAdmin !== false) return true;
+    await assertAdminStoreAssignment({ allAsync, adminId: req.adminId, merchantId: req.merchantId, storeId: Number(storeId) });
+    return true;
+  }
+
   const { getAsync, runAsync, allAsync, requireAdminKey, requirePermission, requireAdminOrWaiter, getWaiterFromRequest, formatOrder, normalizeOrderItems, assertTableExists, syncTableStatus, ensureOrderTables, io, getClientIp, logAudit, upload, UPLOAD_DIR, path, allocateOrderNo, getOrderCooldownMs, createTableToken, buildReceipt, buildKitchenTicket, printToNetworkPrinter, dispatchPrint, verifyPassword, authenticateAdmin, checkAndSetCooldown, withTransaction } = deps;
 
 app.get('/api/admin/waiters', requireAdminKey, requirePermission('can_manage_waiter'), async (req, res) => {
   try {
+    const isPrimaryAdmin = req.isPrimaryAdmin !== false;
     const rows = await allAsync(
-      `SELECT w.id, w.username, w.display_name, w.can_order, w.can_mark_item, w.can_complete_order, w.active, w.store_id, s.name AS store_name
-       FROM waiters w
-       LEFT JOIN stores s ON s.id = w.store_id
-       WHERE w.merchant_id = ?
-       ORDER BY w.store_id, w.id`,
-      [req.merchantId]
+      isPrimaryAdmin
+        ? `SELECT w.id, w.username, w.display_name, w.can_order, w.can_mark_item, w.can_complete_order, w.active, w.store_id, s.name AS store_name
+           FROM waiters w LEFT JOIN stores s ON s.id=w.store_id
+           WHERE w.merchant_id=? ORDER BY w.store_id, w.id`
+        : `SELECT w.id, w.username, w.display_name, w.can_order, w.can_mark_item, w.can_complete_order, w.active, w.store_id, s.name AS store_name
+           FROM waiters w JOIN merchant_admin_store_access a ON a.store_id=w.store_id AND a.merchant_id=w.merchant_id AND a.admin_id=?
+           LEFT JOIN stores s ON s.id=w.store_id
+           WHERE w.merchant_id=? ORDER BY w.store_id, w.id`,
+      isPrimaryAdmin ? [req.merchantId] : [req.adminId, req.merchantId]
     );
     res.json(rows);
   } catch (e) { res.status(500).json({ error: '请求失败，请稍后重试' }); }
@@ -64,6 +75,7 @@ app.post('/api/admin/waiters', requireAdminKey, requirePermission('can_manage_wa
       if (!merchant) throw Object.assign(new Error('商户不存在或已停用'), { statusCode: 403 });
       const store = await getAsync('SELECT id FROM stores WHERE id=? AND merchant_id=? AND active=1 FOR UPDATE', [targetStoreId, merchantId]);
       if (!store) throw Object.assign(new Error('店铺不存在或已停用'), { statusCode: 400 });
+      await assertWaiterStoreAccess(req, targetStoreId);
       if (await cashierUsernameExists(allAsync, username)) {
         throw Object.assign(new Error('该用户名已被收银员账号使用，请换一个'), { statusCode: 409 });
       }
@@ -116,6 +128,8 @@ app.put('/api/admin/waiters/:id', requireAdminKey, requirePermission('can_manage
       if (!merchant) throw Object.assign(new Error('商户不存在或已停用'), { statusCode: 403 });
       const current = await getAsync('SELECT * FROM waiters WHERE id=? AND merchant_id=? FOR UPDATE', [id, merchantId]);
       if (!current) throw Object.assign(new Error('服务员不存在'), { statusCode: 404 });
+      await assertWaiterStoreAccess(req, Number(current.store_id));
+      await assertWaiterStoreAccess(req, Number(current.store_id));
 
       const username = body.username === undefined ? current.username : body.username.trim();
       const displayName = body.display_name === undefined ? current.display_name : body.display_name.trim();
@@ -123,6 +137,7 @@ app.put('/api/admin/waiters/:id', requireAdminKey, requirePermission('can_manage
       if (!Number.isSafeInteger(targetStoreId) || targetStoreId <= 0) throw Object.assign(new Error('目标门店编号无效'), { statusCode: 400 });
       const store = await getAsync('SELECT id FROM stores WHERE id=? AND merchant_id=? AND active=1 FOR UPDATE', [targetStoreId, merchantId]);
       if (!store) throw Object.assign(new Error('目标店铺不存在或已停用'), { statusCode: 400 });
+      await assertWaiterStoreAccess(req, targetStoreId);
       if (username !== current.username && await cashierUsernameExists(allAsync, username)) {
         throw Object.assign(new Error('该用户名已被收银员账号使用，请换一个'), { statusCode: 409 });
       }

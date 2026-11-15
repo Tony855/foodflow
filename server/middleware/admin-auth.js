@@ -8,6 +8,7 @@ const { getActiveWaiter } = require('../services/waiter-auth');
 const crypto = require('crypto');
 const { parsePositiveRouteId } = require('../services/route-id');
 const { safeErrorMetadata } = require('./safe-error-metadata');
+const { resolveAdminStoreAccess } = require('../services/admin-store-access');
 
 function isPermissionEnabled(value) {
   return value === true || value === 1 || value === '1' || value === 'true';
@@ -103,32 +104,13 @@ async function authenticateAdmin(req) {
         const merchant = await getAsync('SELECT * FROM merchants WHERE id=? AND status=1', [admin.merchant_id]);
         if (merchant) {
           const rawRequestedStoreId = req.get('X-Store-Id');
-          const requestedStoreId = rawRequestedStoreId === undefined || rawRequestedStoreId === null || rawRequestedStoreId === ''
-            ? 0
-            : parsePositiveRouteId(rawRequestedStoreId);
-          let validStoreId = null;
-          if (rawRequestedStoreId !== undefined && rawRequestedStoreId !== null && rawRequestedStoreId !== '' &&
-              requestedStoreId === null) {
+          const requestedStoreId = rawRequestedStoreId === undefined || rawRequestedStoreId === null || rawRequestedStoreId === '' ? null : parsePositiveRouteId(rawRequestedStoreId);
+          if (rawRequestedStoreId !== undefined && rawRequestedStoreId !== null && rawRequestedStoreId !== '' && requestedStoreId === null) {
             return { error: '指定的门店编号无效', code: 'INVALID_STORE_ID' };
           }
-          if (requestedStoreId > 0) {
-            const _storeCheck = await getAsync('SELECT id FROM stores WHERE id=? AND merchant_id=? AND active=1', [requestedStoreId, admin.merchant_id]);
-            if (!_storeCheck) {
-              const _validStores = await allAsync('SELECT id, name FROM stores WHERE merchant_id=? ORDER BY id ASC', [admin.merchant_id]);
-              return {
-                error: '指定的门店不存在或不属于当前商户',
-                code: 'STORE_NOT_IN_MERCHANT',
-                requestedStoreId: requestedStoreId,
-                validStores: _validStores,
-                merchantId: admin.merchant_id
-              };
-            }
-            validStoreId = Number(_storeCheck.id);
-          } else {
-            // Default to this merchant's first store, never global store_id=1.
-            const firstStore = await getAsync('SELECT id FROM stores WHERE merchant_id=? AND active=1 ORDER BY id ASC LIMIT 1', [admin.merchant_id]);
-            validStoreId = firstStore ? Number(firstStore.id) : -1;
-          }
+          const storeAccess = await resolveAdminStoreAccess({ getAsync, allAsync, adminId: admin.id, merchantId: admin.merchant_id, requestedStoreId });
+          if (storeAccess.error) return storeAccess;
+          const validStoreId = storeAccess.storeId;
           const timeoutSetting = await getAsync("SELECT value FROM settings WHERE `key` = 'admin_idle_timeout'");
           const configuredTimeoutMinutes = Number(timeoutSetting?.value ?? 30);
           const timeoutMinutes = Number.isSafeInteger(configuredTimeoutMinutes) && configuredTimeoutMinutes > 0 ? Math.min(configuredTimeoutMinutes, 1440) : 30;
@@ -176,7 +158,7 @@ async function authenticateAdmin(req) {
 async function requireAdminKey(req, res, next) {
   try {
     const result = await authenticateAdmin(req);
-    if (result && result.error) return res.status(401).json(result);
+    if (result && result.error) return res.status(result.status || 401).json(result);
     if (result) {
       req.adminId = result.adminId;
       req.merchantId = result.merchantId;
@@ -231,7 +213,7 @@ async function logAudit(...args) {
 async function requireAdminOrWaiter(req, res, next) {
   try {
     const adminResult = await authenticateAdmin(req);
-    if (adminResult && adminResult.error) return res.status(401).json(adminResult);
+    if (adminResult && adminResult.error) return res.status(adminResult.status || 401).json(adminResult);
     if (adminResult) {
       req.adminId = adminResult.adminId;
       req.merchantId = adminResult.merchantId;
