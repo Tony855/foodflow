@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const registerAdminSettings = require('../routes/admin-settings');
@@ -171,4 +173,13 @@ test('unexpected store recipient database failures log only safe stage metadata'
   } finally {
     console.error = originalError;
   }
+});
+
+
+test('server injects the client IP helper required by transactional settings audits', () => {
+  const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.match(
+    serverSource,
+    /require\(['"]\.\/routes\/admin-settings\.js['"]\)\(app,\s*\{[^}]*\bgetClientIp\b[^}]*\}\)/
+  );
 });
