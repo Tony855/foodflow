@@ -51,3 +51,18 @@ test('primary admin can delegate any active store belonging to the merchant', as
   const deps = db({ primaryId: 5, stores: [10, 11] });
   assert.equal(await assertActorCanAssignStores({ ...deps, actorAdminId: 5, merchantId: 7, storeIds: [10, 11] }), true);
 });
+
+
+test('sub-admin cannot edit another admin whose store scope does not overlap', async () => {
+  const getAsync = async () => ({ min_id: 1 });
+  const allAsync = async (_sql, params) => [{ store_id: Number(params[0]) === 5 ? 10 : 11 }];
+  await assert.rejects(
+    () => assertTargetAdminInActorScope({ getAsync, allAsync, actorAdminId: 5, targetAdminId: 6, merchantId: 7 }),
+    error => error.status === 403
+  );
+});
+test('sub-admin can manage another admin with an overlapping store assignment', async () => {
+  const getAsync = async () => ({ min_id: 1 });
+  const allAsync = async () => [{ store_id: 10 }];
+  assert.equal(await assertTargetAdminInActorScope({ getAsync, allAsync, actorAdminId: 5, targetAdminId: 6, merchantId: 7 }), true);
+});
