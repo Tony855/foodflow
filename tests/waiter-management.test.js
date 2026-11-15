@@ -146,3 +146,12 @@ test('waiter update rolls back when its audit write fails', async () => {
   assert.equal(ctx.rolledBack, true);
   assert.match(res.body.error, /所有更改已回滚/);
 });
+
+
+test('sub-admin cannot update a waiter in a store outside their assignment', async () => {
+  const ctx = setup();
+  const res = response();
+  await ctx.updateHandler({ merchantId: 5, adminId: 9, isPrimaryAdmin: false, params: { id: '77' }, body: { display_name: 'Blocked' } }, res);
+  assert.equal(res.statusCode, 403);
+  assert.equal(ctx.calls.some(call => call.type === 'run' && call.sql.startsWith('UPDATE waiters')), false);
+});
