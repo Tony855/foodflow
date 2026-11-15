@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const attachPrinterRoutes = require('../routes/admin-printers');
@@ -186,4 +188,13 @@ test('print endpoints and printer payloads never expose customer bearer tokens',
     assert.equal(Object.hasOwn(order, 'sessionToken'), false);
     assert.equal(Object.hasOwn(order, 'customerToken'), false);
   }
+});
+
+
+test('server injects client IP helper required by printer audit writes', () => {
+  const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.match(
+    serverSource,
+    /require\(['"]\.\/routes\/admin-printers\.js['"]\)\(app,\s*\{[^}]*\bgetClientIp\b[^}]*\}\)/
+  );
 });
