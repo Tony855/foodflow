@@ -46,13 +46,15 @@ module.exports = function(app, deps) {
 
   // 根据 scope 生成 store 过滤条件
   // 返回 { where, params, isAll }
-  function buildStoreWhere(req, scope) {
+  async function buildStoreWhere(req, scope) {
     if (scope === 'all') {
-      return {
-        where: 'store_id IN (SELECT id FROM stores WHERE merchant_id=?)',
-        params: [req.merchantId],
-        isAll: true
-      };
+      if (req.isPrimaryAdmin) {
+        return { where: 'store_id IN (SELECT id FROM stores WHERE merchant_id=?)', params: [req.merchantId], isAll: true };
+      }
+      const assigned = await allAsync('SELECT store_id FROM merchant_admin_store_access WHERE admin_id=? AND merchant_id=?', [req.adminId, req.merchantId]);
+      const ids = assigned.map(row => Number(row.store_id)).filter(id => Number.isSafeInteger(id) && id > 0);
+      if (!ids.length) return { where: '1=0', params: [], isAll: true };
+      return { where: 'store_id IN (' + ids.map(() => '?').join(',') + ')', params: ids, isAll: true };
     }
     return {
       where: 'store_id=?',
@@ -78,7 +80,7 @@ module.exports = function(app, deps) {
       if (scope === 'all' && (!Number.isSafeInteger(merchantId) || merchantId <= 0)) {
         return res.status(403).json({ error: '商户信息无效' });
       }
-      const sw = buildStoreWhere(req, scope);
+      const sw = await buildStoreWhere(req, scope);
       const swWhere = sw.where;
       const swParams = sw.params;
       const isAll = sw.isAll;
