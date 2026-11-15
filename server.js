@@ -1577,7 +1577,8 @@ initDatabase().then(async () => {
     process.exit(1);
     return;
   }
-  if (process.env.TELEGRAM_NOTIFICATION_WORKER_ENABLED === 'true') {
+  // Notifications run by default; set the variable to 'false' only for an intentional maintenance/rollback pause.
+  if (process.env.TELEGRAM_NOTIFICATION_WORKER_ENABLED !== 'false') {
     stopTelegramNotificationWorker = telegramNotificationWorker.start();
     console.log('[telegram-worker] background delivery enabled');
   }
