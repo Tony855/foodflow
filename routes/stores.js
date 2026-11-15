@@ -8,13 +8,32 @@ const { hashPassword, verifyPassword } = require("../server/middleware/password"
 const { compressImage } = require("../server/services/image-compress");
 
 const { initStoreSettings } = require('../server/services/settings-init');
+const { resolveAdminStoreAccess } = require('../server/services/admin-store-access');
 
 module.exports = function(app, deps) {
+  const { getAsync, allAsync } = deps;
+
+  async function assertStoreAssigned(req, storeId) {
+    if (!req.adminId || req.isPrimaryAdmin) return true;
+    const access = await resolveAdminStoreAccess({
+      getAsync, allAsync, adminId: req.adminId, merchantId: req.merchantId, requestedStoreId: Number(storeId)
+    });
+    if (access.error) throw Object.assign(new Error(access.error), { statusCode: 403 });
+    return true;
+  }
+
   const { getAsync, runAsync, allAsync, requireAdminKey, requirePermission, requireAdminOrWaiter, getWaiterFromRequest, formatOrder, normalizeOrderItems, assertTableExists, syncTableStatus, ensureOrderTables, io, getClientIp, logAudit, upload, UPLOAD_DIR, path, allocateOrderNo, getOrderCooldownMs, createTableToken, buildReceipt, buildKitchenTicket, printToNetworkPrinter, dispatchPrint, verifyPassword, authenticateAdmin, checkAndSetCooldown, withTransaction } = deps;
 
 app.get('/api/admin/stores', requireAdminKey, requirePermission('can_manage_store'), async (req, res) => {
   try {
-    res.json(await allAsync('SELECT * FROM stores WHERE merchant_id=? ORDER BY id', [req.merchantId]));
+    if (req.isPrimaryAdmin) {
+      return res.json(await allAsync('SELECT * FROM stores WHERE merchant_id=? ORDER BY id', [req.merchantId]));
+    }
+    if (!req.adminId) return res.json([]);
+    res.json(await allAsync(
+      'SELECT s.* FROM merchant_admin_store_access a JOIN stores s ON s.id=a.store_id AND s.merchant_id=a.merchant_id WHERE a.merchant_id=? AND a.admin_id=? AND s.active=1 ORDER BY s.id',
+      [req.merchantId, req.adminId]
+    ));
   } catch (e) { res.status(500).json({ error: '请求失败，请稍后重试' }); }
 });
 
@@ -52,6 +71,9 @@ app.post('/api/admin/stores', requireAdminKey, requirePermission('can_manage_sto
         [storeName, storeCode, storeAddress, merchantId]
       );
       storeId = result.lastID;
+      if (req.adminId && !req.isPrimaryAdmin) {
+        await runAsync('INSERT INTO merchant_admin_store_access (merchant_id, admin_id, store_id, created_at) VALUES (?, ?, ?, NOW(3))', [merchantId, req.adminId, storeId]);
+      }
       await initStoreSettings(runAsync, storeId);
       const actor = req.adminId
         ? await getAsync('SELECT username FROM merchant_admins WHERE id=? AND merchant_id=?', [req.adminId, merchantId])
@@ -111,6 +133,8 @@ app.put('/api/admin/stores/:id', requireAdminKey, requirePermission('can_manage_
       if (!merchant) throw Object.assign(new Error('商户不存在'), { statusCode: 404 });
       const current = await getAsync('SELECT * FROM stores WHERE id=? AND merchant_id=? FOR UPDATE', [id, merchantId]);
       if (!current) throw Object.assign(new Error('店铺不存在'), { statusCode: 404 });
+      await assertStoreAssigned(req, id);
+      await assertStoreAssigned(req, id);
 
       const name = nextName === undefined ? current.name : nextName;
       const code = nextCode === undefined || nextCode === '' ? current.code : nextCode;
@@ -188,6 +212,7 @@ app.delete('/api/admin/stores/:id', requireAdminKey, requirePermission('can_mana
       await runAsync('DELETE FROM telegram_customer_bindings WHERE merchant_id=? AND store_id=?', [merchantId, id]);
       await runAsync('DELETE FROM telegram_notification_outbox WHERE merchant_id=? AND store_id=?', [merchantId, id]);
       await runAsync('DELETE FROM telegram_store_admin_recipients WHERE merchant_id=? AND store_id=?', [merchantId, id]);
+      await runAsync('DELETE FROM merchant_admin_store_access WHERE merchant_id=? AND store_id=?', [merchantId, id]);
 
       const result = await runAsync('DELETE FROM stores WHERE id=? AND merchant_id=?', [id, merchantId]);
       if (!result.affectedRows) throw Object.assign(new Error('店铺不存在或已被删除'), { statusCode: 404 });
@@ -224,8 +249,10 @@ app.post('/api/admin/stores/:id/copy-menu', requireAdminKey, requirePermission('
       if (!merchant) throw Object.assign(new Error('商户不存在'), { statusCode: 404 });
       const targetStore = await getAsync('SELECT id FROM stores WHERE id=? AND merchant_id=? FOR UPDATE', [targetStoreId, merchantId]);
       if (!targetStore) throw Object.assign(new Error('店铺不存在'), { statusCode: 404 });
+      await assertStoreAssigned(req, targetStoreId);
       const sourceStore = await getAsync('SELECT id FROM stores WHERE merchant_id=? ORDER BY id ASC LIMIT 1 FOR UPDATE', [merchantId]);
       if (!sourceStore) throw Object.assign(new Error('未找到源店铺'), { statusCode: 400 });
+      await assertStoreAssigned(req, Number(sourceStore.id));
       const sourceStoreId = Number(sourceStore.id);
       if (targetStoreId === sourceStoreId) throw Object.assign(new Error('总店无需复制自身'), { statusCode: 400 });
 
