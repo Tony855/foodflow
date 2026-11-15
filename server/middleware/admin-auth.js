@@ -158,7 +158,7 @@ async function authenticateAdmin(req) {
 async function requireAdminKey(req, res, next) {
   try {
     const result = await authenticateAdmin(req);
-    if (result && result.error) return res.status(401).json(result);
+    if (result && result.error) return res.status(result.status || 401).json(result);
     if (result) {
       req.adminId = result.adminId;
       req.merchantId = result.merchantId;
@@ -213,7 +213,7 @@ async function logAudit(...args) {
 async function requireAdminOrWaiter(req, res, next) {
   try {
     const adminResult = await authenticateAdmin(req);
-    if (adminResult && adminResult.error) return res.status(401).json(adminResult);
+    if (adminResult && adminResult.error) return res.status(adminResult.status || 401).json(adminResult);
     if (adminResult) {
       req.adminId = adminResult.adminId;
       req.merchantId = adminResult.merchantId;
