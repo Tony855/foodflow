@@ -6,7 +6,7 @@ const { hashSessionToken } = require('../server/services/session-token');
 const QRCode = require('qrcode');
 const { parsePositiveRouteId } = require('../server/services/route-id');
 const { safeErrorMetadata } = require('../server/middleware/safe-error-metadata');
-const { replaceAdminStoreAccess, normalizeStoreIds, assertActorCanAssignStores } = require('../server/services/admin-store-access');
+const { replaceAdminStoreAccess, normalizeStoreIds, assertActorCanAssignStores, assertAdminStoreAssignment } = require('../server/services/admin-store-access');
 const { enqueueSystemAdminTelegramNotification, enqueueCustomerTelegramNotification, enqueueStoreAdminTelegramNotification } = require('../server/services/telegram-notification-enqueue');
 
 function normalizeAdminFlag(value, fallback, field) {
@@ -400,6 +400,21 @@ module.exports = function(app, deps) {
     );
   }
 
+  async function assertCashierStoreAccess(req, storeId) {
+    if (!req.adminId || req.isPrimaryAdmin) return true;
+    await assertAdminStoreAssignment({ allAsync, adminId: req.adminId, merchantId: req.merchantId, storeId: Number(storeId) });
+    return true;
+  }
+
+  async function getCashiersVisibleToAdmin(req) {
+    const list = await getAllCashiersByMerchant(req.merchantId);
+    if (req.isPrimaryAdmin) return list;
+    if (!req.adminId) return [];
+    const assignments = await allAsync('SELECT store_id FROM merchant_admin_store_access WHERE admin_id=? AND merchant_id=?', [req.adminId, req.merchantId]);
+    const allowed = new Set(assignments.map(row => Number(row.store_id)));
+    return list.filter(cashier => allowed.has(Number(cashier.store_id)));
+  }
+
   async function getAllCashiersByMerchant(merchantId, forUpdate = false) {
     const stores = await allAsync(
       'SELECT id, name FROM stores WHERE merchant_id=? ORDER BY id' + (forUpdate ? ' FOR UPDATE' : ''),
@@ -458,7 +473,7 @@ module.exports = function(app, deps) {
 
   app.get('/api/admin/cashiers', requireAdminKey, requirePermission('can_manage_cashier'), async (req, res) => {
     try {
-      const list = await getAllCashiersByMerchant(req.merchantId);
+      const list = await getCashiersVisibleToAdmin(req);
       res.json({ cashiers: list });
     } catch (e) { const status = Number.isInteger(e.status) && e.status >= 400 && e.status < 500 ? e.status : 500;
       res.status(status).json({ error: status === 500 ? '请求失败，请稍后重试' : e.message }); }
@@ -488,6 +503,7 @@ module.exports = function(app, deps) {
         if (!merchant) throw Object.assign(new Error('商户不存在或已停用'), { status: 403 });
         const store = await getAsync('SELECT id, name FROM stores WHERE id=? AND merchant_id=? AND active=1 FOR UPDATE', [targetStoreId, merchantId]);
         if (!store) throw Object.assign(new Error('目标店铺不存在或已停用'), { status: 400 });
+        await assertCashierStoreAccess(req, targetStoreId);
         const all = await getAllCashiersByMerchant(merchantId, true);
         if (all.some(cashier => cashier.username === username)) {
           throw Object.assign(new Error('该商户下已存在同名收银员账号'), { status: 409 });
@@ -549,6 +565,7 @@ module.exports = function(app, deps) {
         if (!merchant) throw Object.assign(new Error('商户不存在或已停用'), { status: 403 });
         const found = await findCashierStore(merchantId, id, true);
         if (!found) throw Object.assign(new Error('收银员不存在'), { status: 404 });
+        await assertCashierStoreAccess(req, Number(found.store.id));
         const { store: oldStore, list: oldList, idx } = found;
         const cashier = { ...oldList[idx], permissions: { ...(oldList[idx].permissions || {}) } };
         const targetStoreId = requestedTargetStoreId === null ? parsePositiveRouteId(oldStore.id) : requestedTargetStoreId;
@@ -558,6 +575,7 @@ module.exports = function(app, deps) {
           ? await getAsync('SELECT id, name FROM stores WHERE id=? AND merchant_id=? AND active=1 FOR UPDATE', [targetStoreId, merchantId])
           : oldStore;
         if (!newStore) throw Object.assign(new Error('目标店铺不存在或已停用'), { status: 400 });
+        if (storeChanged) await assertCashierStoreAccess(req, targetStoreId);
 
         const previousActive = normalizeAdminFlag(cashier.active, 1, 'active') === 1;
         const active = normalizeAdminFlag(body.active, previousActive ? 1 : 0, 'active') === 1;
@@ -629,6 +647,7 @@ module.exports = function(app, deps) {
 
   app.post('/api/admin/reset-data', requireAdminKey, requirePermission('can_manage_store'), async (req, res) => {
     try {
+      if (!req.isPrimaryAdmin) return res.status(403).json({ error: '数据重置仅允许主管理员操作' });
       const password = typeof req.body?.password === 'string' ? req.body.password : '';
       if (!password || password.length > 128) return res.status(400).json({ error: '请输入有效的管理员密码' });
       const merchantId = Number(req.merchantId);
