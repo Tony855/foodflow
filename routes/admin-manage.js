@@ -662,7 +662,7 @@ module.exports = function(app, deps) {
 
   app.post('/api/admin/reset-data', requireAdminKey, requirePermission('can_manage_store'), async (req, res) => {
     try {
-      if (!req.isPrimaryAdmin) return res.status(403).json({ error: '数据重置仅允许主管理员操作' });
+      if (req.isPrimaryAdmin === false) return res.status(403).json({ error: '数据重置仅允许主管理员操作' });
       const password = typeof req.body?.password === 'string' ? req.body.password : '';
       if (!password || password.length > 128) return res.status(400).json({ error: '请输入有效的管理员密码' });
       const merchantId = Number(req.merchantId);
