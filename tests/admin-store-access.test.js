@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { resolveAdminStoreAccess, normalizeStoreIds, assertActorCanAssignStores } = require('../server/services/admin-store-access');
+const { resolveAdminStoreAccess, normalizeStoreIds, assertActorCanAssignStores, assertTargetAdminInActorScope } = require('../server/services/admin-store-access');
 function db({ primaryId = 1, stores = [10, 11], assigned = [10] } = {}) {
   return {
     getAsync: async (sql, params = []) => {
