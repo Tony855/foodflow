@@ -11,9 +11,7 @@ const { initStoreSettings } = require('../server/services/settings-init');
 const { resolveAdminStoreAccess } = require('../server/services/admin-store-access');
 
 module.exports = function(app, deps) {
-  const { getAsync, allAsync } = deps;
-
-  async function assertStoreAssigned(req, storeId) {
+    async function assertStoreAssigned(req, storeId) {
     if (!req.adminId || req.isPrimaryAdmin) return true;
     const access = await resolveAdminStoreAccess({
       getAsync, allAsync, adminId: req.adminId, merchantId: req.merchantId, requestedStoreId: Number(storeId)
