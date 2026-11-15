@@ -28,7 +28,7 @@ async function cashierUsernameExists(allAsync, username) {
 
 module.exports = function(app, deps) {
   async function assertWaiterStoreAccess(req, storeId) {
-    if (!req.adminId || req.isPrimaryAdmin) return true;
+    if (!req.adminId || req.isPrimaryAdmin !== false) return true;
     await assertAdminStoreAssignment({ allAsync, adminId: req.adminId, merchantId: req.merchantId, storeId: Number(storeId) });
     return true;
   }
@@ -37,8 +37,9 @@ module.exports = function(app, deps) {
 
 app.get('/api/admin/waiters', requireAdminKey, requirePermission('can_manage_waiter'), async (req, res) => {
   try {
+    const isPrimaryAdmin = req.isPrimaryAdmin !== false;
     const rows = await allAsync(
-      req.isPrimaryAdmin
+      isPrimaryAdmin
         ? `SELECT w.id, w.username, w.display_name, w.can_order, w.can_mark_item, w.can_complete_order, w.active, w.store_id, s.name AS store_name
            FROM waiters w LEFT JOIN stores s ON s.id=w.store_id
            WHERE w.merchant_id=? ORDER BY w.store_id, w.id`
@@ -46,7 +47,7 @@ app.get('/api/admin/waiters', requireAdminKey, requirePermission('can_manage_wai
            FROM waiters w JOIN merchant_admin_store_access a ON a.store_id=w.store_id AND a.merchant_id=w.merchant_id AND a.admin_id=?
            LEFT JOIN stores s ON s.id=w.store_id
            WHERE w.merchant_id=? ORDER BY w.store_id, w.id`,
-      req.isPrimaryAdmin ? [req.merchantId] : [req.adminId, req.merchantId]
+      isPrimaryAdmin ? [req.merchantId] : [req.adminId, req.merchantId]
     );
     res.json(rows);
   } catch (e) { res.status(500).json({ error: '请求失败，请稍后重试' }); }
