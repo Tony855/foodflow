@@ -3,7 +3,6 @@
    ============================================================ */
 const { hashPassword, verifyPassword, needsRehash } = require('../middleware/password');
 const { hasCorruptFinancialAmounts } = require('./order-financial');
-const { getAsync } = require('../db/helpers');
 
 function formatOrder(row) {
   let items = row.items;
@@ -48,6 +47,7 @@ function formatOrder(row) {
 }
 
 async function normalizeOrderItems(items, storeId) {
+  const { getAsync } = require('../db/helpers');
   if (!Array.isArray(items) || items.length === 0) throw new Error('订单至少需要一道菜品');
   const normalized = [];
   for (const item of items) {
