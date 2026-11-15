@@ -66,6 +66,38 @@ function collectPerms(containerId) {
   return perms;
 }
 
+
+function renderStoreAccess(containerId, selectedIds, disabled) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const stores = (window._adminStores || []).filter(store => Number(store.active) === 1);
+  if (!stores.length) {
+    container.innerHTML = '<div class="empty-hint">当前账号没有可分配的启用门店</div>';
+    return;
+  }
+  const selected = new Set((Array.isArray(selectedIds) ? selectedIds : []).map(Number));
+  if (!selected.size) {
+    const current = document.getElementById('adminStoreSelect')?.value;
+    if (current) selected.add(Number(current));
+  }
+  container.innerHTML = stores.map(store =>
+    '<label class="admin-perm-item">' +
+      '<span class="admin-perm-label">' + esc(store.name) + '</span>' +
+      '<label class="store-switch"><input type="checkbox" data-store-access="' + Number(store.id) + '" ' +
+        (selected.has(Number(store.id)) ? 'checked ' : '') + (disabled ? 'disabled ' : '') +
+      '><span class="store-switch-slider"></span></label>' +
+    '</label>'
+  ).join('');
+}
+
+function collectStoreAccess(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('input[data-store-access]:checked'))
+    .map(input => Number(input.dataset.storeAccess))
+    .filter(id => Number.isSafeInteger(id) && id > 0);
+}
+
 /* ========= 列表 ========= */
 let adminListCache = [];
 
@@ -112,16 +144,17 @@ function editAdminByIndex(i) {
     can_view_logs: a.can_view_logs,
     can_manage_financial_reconciliation: a.can_manage_financial_reconciliation
   };
-  editAdmin(a.id, a.username, a.display_name, a.active, perms, a.is_primary);
+  editAdmin(a.id, a.username, a.display_name, a.active, perms, a.is_primary, a.store_ids);
 }
 
-function editAdmin(id, username, displayName, active, permissions, isPrimary) {
+function editAdmin(id, username, displayName, active, permissions, isPrimary, storeIds) {
   document.getElementById('editAdminId').value = id;
   document.getElementById('editAdminUsername').value = username || '';
   document.getElementById('editAdminDisplayName').value = displayName || '';
   document.getElementById('editAdminPassword').value = '';
   document.getElementById('editAdminActive').checked = active ? true : false;
   renderPerms('editAdminPermissions', permissions || {}, !!isPrimary);
+  renderStoreAccess('editAdminStoreAccess', storeIds, !!isPrimary);
   document.getElementById('editAdminPermNotice').style.display = isPrimary ? 'block' : 'none';
   document.getElementById('adminEditModal').classList.add('open');
 }
@@ -140,6 +173,7 @@ function saveAdminEdit() {
   const notice = document.getElementById('editAdminPermNotice');
   if (!notice || notice.style.display !== 'block') {
     body.permissions = collectPerms('editAdminPermissions');
+    body.store_ids = collectStoreAccess('editAdminStoreAccess');
   }
   api('/admin/admins/' + id, { method: 'PUT', body }).then(() => {
     SLF.ui.toast('✅ ' + tAdmin('adminUpdated'));
@@ -170,6 +204,7 @@ function openAddAdminModal() {
   document.getElementById('addAdminPassword').value = '';
   document.getElementById('addAdminDisplayName').value = '';
   renderPerms('addAdminPermissions', {}, false);
+  renderStoreAccess('addAdminStoreAccess', [], false);
   document.getElementById('adminAddModal').classList.add('open');
 }
 
@@ -184,7 +219,9 @@ async function submitAddAdmin() {
   if (password.length < 6) { SLF.ui.toast('❌ ' + tAdmin('passwordMin6')); return; }
   const permissions = collectPerms('addAdminPermissions');
   try {
-    await api('/admin/admins', { method: 'POST', body: { username, password, display_name, active: 1, permissions } });
+    const store_ids = collectStoreAccess('addAdminStoreAccess');
+    if (!store_ids.length) { SLF.ui.toast('❌ 请至少选择一个可访问门店'); return; }
+    await api('/admin/admins', { method: 'POST', body: { username, password, display_name, active: 1, permissions, store_ids } });
     closeAddAdminModal();
     SLF.ui.toast('✅ ' + tAdmin('adminAdded'));
     loadAdmins();
