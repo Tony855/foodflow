@@ -8,15 +8,16 @@ const { hashPassword, verifyPassword } = require("../server/middleware/password"
 const { compressImage } = require("../server/services/image-compress");
 
 const { initStoreSettings } = require('../server/services/settings-init');
-const { resolveAdminStoreAccess } = require('../server/services/admin-store-access');
 
 module.exports = function(app, deps) {
     async function assertStoreAssigned(req, storeId) {
     if (!req.adminId || req.isPrimaryAdmin) return true;
-    const access = await resolveAdminStoreAccess({
-      getAsync, allAsync, adminId: req.adminId, merchantId: req.merchantId, requestedStoreId: Number(storeId)
-    });
-    if (access.error) throw Object.assign(new Error(access.error), { statusCode: 403 });
+    const store = await getAsync('SELECT id FROM stores WHERE id=? AND merchant_id=?', [storeId, req.merchantId]);
+    const assignments = await allAsync(
+      'SELECT store_id FROM merchant_admin_store_access WHERE admin_id=? AND merchant_id=? AND store_id=?',
+      [req.adminId, req.merchantId, storeId]
+    );
+    if (!store || !assignments.length) throw Object.assign(new Error('当前管理员未获授权管理该门店'), { statusCode: 403 });
     return true;
   }
 
@@ -29,7 +30,7 @@ app.get('/api/admin/stores', requireAdminKey, requirePermission('can_manage_stor
     }
     if (!req.adminId) return res.json([]);
     res.json(await allAsync(
-      'SELECT s.* FROM merchant_admin_store_access a JOIN stores s ON s.id=a.store_id AND s.merchant_id=a.merchant_id WHERE a.merchant_id=? AND a.admin_id=? AND s.active=1 ORDER BY s.id',
+      'SELECT s.* FROM merchant_admin_store_access a JOIN stores s ON s.id=a.store_id AND s.merchant_id=a.merchant_id WHERE a.merchant_id=? AND a.admin_id=? ORDER BY s.id',
       [req.merchantId, req.adminId]
     ));
   } catch (e) { res.status(500).json({ error: '请求失败，请稍后重试' }); }
