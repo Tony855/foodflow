@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { resolveAdminStoreAccess, normalizeStoreIds } = require('../server/services/admin-store-access');
+const { resolveAdminStoreAccess, normalizeStoreIds, assertActorCanAssignStores } = require('../server/services/admin-store-access');
 function db({ primaryId = 1, stores = [10, 11], assigned = [10] } = {}) {
   return {
     getAsync: async (sql, params = []) => {
@@ -37,4 +37,17 @@ test('store assignment lists reject empty, invalid and duplicate ids', () => {
   assert.throws(() => normalizeStoreIds([1, '1']), /无效或重复/);
   assert.throws(() => normalizeStoreIds(['1x']), /无效或重复/);
   assert.deepEqual(normalizeStoreIds([1, '2']), [1, 2]);
+});
+
+
+test('sub-admin cannot delegate a store outside their own assignments', async () => {
+  const deps = db({ primaryId: 1, assigned: [10] });
+  await assert.rejects(
+    () => assertActorCanAssignStores({ ...deps, actorAdminId: 5, merchantId: 7, storeIds: [11] }),
+    error => error.status === 403
+  );
+});
+test('primary admin can delegate any active store belonging to the merchant', async () => {
+  const deps = db({ primaryId: 5, stores: [10, 11] });
+  assert.equal(await assertActorCanAssignStores({ ...deps, actorAdminId: 5, merchantId: 7, storeIds: [10, 11] }), true);
 });
