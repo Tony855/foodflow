@@ -978,7 +978,7 @@ function renderStoreAccess(containerId, selectedIds, disabled) {
     container.innerHTML = '<div class="empty-hint">当前账号没有可分配的启用门店</div>';
     return;
   }
-  const selected = new Set((Array.isArray(selectedIds) ? selectedIds : []).map(Number));
+  const selected = new Set((disabled ? stores.map(store => Number(store.id)) : (Array.isArray(selectedIds) ? selectedIds : [])).map(Number));
   if (!selected.size) {
     const current = document.getElementById('adminStoreSelect')?.value;
     if (current) selected.add(Number(current));
@@ -1077,6 +1077,7 @@ function saveAdminEdit() {
   if (!notice || notice.style.display !== 'block') {
     body.permissions = collectPerms('editAdminPermissions');
     body.store_ids = collectStoreAccess('editAdminStoreAccess');
+    if (!body.store_ids.length) { SLF.ui.toast('❌ 请至少选择一个可访问门店'); return; }
   }
   api('/admin/admins/' + id, { method: 'PUT', body }).then(() => {
     SLF.ui.toast('✅ ' + tAdmin('adminUpdated'));
