@@ -141,6 +141,6 @@ module.exports = function(app, deps) {
   });
 
   // Liveness only confirms the Node process is responding.
-  app.get('/api/health', (req, res) => res.json({ ok: true, service: 'foodflow', timestamp: new Date().toISOString() }));
+  app.get('/api/health/live', (req, res) => res.json({ ok: true, service: 'foodflow', timestamp: new Date().toISOString() }));
 
 };
