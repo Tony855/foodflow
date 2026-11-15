@@ -58,7 +58,7 @@ Daily summaries expose imported batch totals and counts for matched, pending, un
 
 ## Backward-compatible startup migration
 
-The startup migration creates the review-event table if absent, checks for existing duplicate journal assignments, and adds the unique assignment index only when missing. It does not rebuild statement batches, rewrite existing match statuses, backfill old orders, or run on a production host as part of this code change.
+The startup migration creates the review-event table if absent and enforces the one-to-one journal assignment constraint through an explicit schema-inspection migration. It checks for duplicate legacy assignments before DDL, validates the actual unique single-column index definition (not only its name), fails closed on a same-name index with a different definition, and recognizes an equivalent exact unique index under another name. A concurrent startup duplicate-index-name race is accepted only after re-reading and validating the winning index. Existing rows and financial values are never rewritten or deleted. The migration does not rebuild statement batches, rewrite existing match statuses, backfill old orders, or run on a production host as part of this code change.
 
 ## Audit history and month-end preparation
 
