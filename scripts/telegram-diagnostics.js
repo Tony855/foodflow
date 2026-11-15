@@ -20,7 +20,7 @@ async function collectTelegramDiagnostics({ allAsync, env = process.env, fetchIm
   if (typeof allAsync !== 'function') throw new TypeError('allAsync is required');
 
   const settingRows = await allAsync(
-    'SELECT \`key\`, value FROM settings WHERE \`key\` IN (?, ?, ?, ?, ?, ?)',
+    'SELECT `key`, value FROM settings WHERE \`key\` IN (?, ?, ?, ?, ?, ?)',
     [
       'telegram_admin_bot_enabled',
       'telegram_admin_bot_token',
