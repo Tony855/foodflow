@@ -11,6 +11,7 @@ const {
 } = require('../server/db/migrations/financial-month-close');
 const { ensureFinancialExceptionAlertSchema } = require('../server/db/migrations/financial-exception-alerts');
 const { ensureProviderEventQueueIndexes, INDEXES: PROVIDER_EVENT_QUEUE_INDEXES } = require('../server/db/migrations/provider-event-queue-indexes');
+const { ensureFinancialReconciliationAssignmentIndex } = require('../server/db/migrations/financial-reconciliation-assignment-index');
 const { createProviderEventQueue } = require('../server/services/provider-event-queue');
 
 const databaseUrl = process.env.MYSQL_INTEGRATION_URL;
@@ -2744,3 +2745,71 @@ test('MySQL integration: expired provider event leases cannot complete or schedu
   assert.equal(completed.processing_status, 'processed');
   assert.equal(completed.lease_token, null);
 });
+
+test('MySQL integration: legacy assignment index migration preserves rows and fails closed on drift', {
+  skip: !databaseUrl ? 'MYSQL_INTEGRATION_URL is not configured' : false,
+  timeout: 30000
+}, async t => {
+  const { connection, runAsync, getAsync, allAsync } = await connectTestDatabase();
+  t.after(async () => {
+    try {
+      await connection.query('DROP TABLE IF EXISTS financial_reconciliation_items');
+    } finally {
+      await connection.end();
+    }
+  });
+
+  await runAsync('DROP TABLE IF EXISTS financial_reconciliation_items');
+  await runAsync(`CREATE TABLE financial_reconciliation_items (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    matched_journal_transaction_id BIGINT DEFAULT NULL,
+    legacy_note VARCHAR(80) NOT NULL DEFAULT ''
+  ) ENGINE=InnoDB`);
+  await runAsync(
+    "INSERT INTO financial_reconciliation_items (matched_journal_transaction_id,legacy_note) VALUES (901,'keep existing row'),(NULL,'keep null assignment')"
+  );
+
+  const first = await ensureFinancialReconciliationAssignmentIndex({ runAsync, getAsync, allAsync });
+  assert.deepEqual(first, { created: true, indexName: 'unique_reconciliation_journal_assignment' });
+  const preserved = await allAsync(
+    'SELECT id,matched_journal_transaction_id,legacy_note FROM financial_reconciliation_items ORDER BY id'
+  );
+  assert.deepEqual(preserved.map(row => [Number(row.id), row.matched_journal_transaction_id === null ? null : Number(row.matched_journal_transaction_id), row.legacy_note]),
+    [[1, 901, 'keep existing row'], [2, null, 'keep null assignment']]);
+
+  const second = await ensureFinancialReconciliationAssignmentIndex({ runAsync, getAsync, allAsync });
+  assert.deepEqual(second, { created: false, indexName: 'unique_reconciliation_journal_assignment' });
+  const uniqueIndex = (await allAsync('SHOW INDEX FROM financial_reconciliation_items'))
+    .filter(index => index.Key_name === 'unique_reconciliation_journal_assignment');
+  assert.equal(uniqueIndex.length, 1);
+  assert.equal(Number(uniqueIndex[0].Non_unique), 0);
+  assert.equal(uniqueIndex[0].Column_name, 'matched_journal_transaction_id');
+
+  await runAsync('DROP TABLE financial_reconciliation_items');
+  await runAsync(`CREATE TABLE financial_reconciliation_items (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    matched_journal_transaction_id BIGINT DEFAULT NULL
+  ) ENGINE=InnoDB`);
+  await runAsync(
+    'INSERT INTO financial_reconciliation_items (matched_journal_transaction_id) VALUES (902),(902)'
+  );
+  await assert.rejects(
+    ensureFinancialReconciliationAssignmentIndex({ runAsync, getAsync, allAsync }),
+    /duplicate journal assignments/
+  );
+  const duplicateRows = await allAsync('SELECT id,matched_journal_transaction_id FROM financial_reconciliation_items ORDER BY id');
+  assert.deepEqual(duplicateRows.map(row => Number(row.matched_journal_transaction_id)), [902, 902],
+    'migration must not rewrite or delete conflicting legacy rows');
+
+  await runAsync('DROP TABLE financial_reconciliation_items');
+  await runAsync(`CREATE TABLE financial_reconciliation_items (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    matched_journal_transaction_id BIGINT DEFAULT NULL,
+    KEY unique_reconciliation_journal_assignment (id)
+  ) ENGINE=InnoDB`);
+  await assert.rejects(
+    ensureFinancialReconciliationAssignmentIndex({ runAsync, getAsync, allAsync }),
+    /unexpected definition/
+  );
+});
+
