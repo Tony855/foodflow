@@ -92,7 +92,7 @@ test('liveness remains 200 without touching the database', async () => {
     allAsync: async () => []
   });
   const res = responseRecorder();
-  await app.routes.get('/api/health')({}, res);
+  await app.routes.get('/api/health/live')({}, res);
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.body.service, 'foodflow');
   assert.equal(databaseTouched, false);
@@ -102,8 +102,10 @@ test('readiness and liveness paths have a single owner each', () => {
   const app = buildApp();
   registerReadiness(app);
   registerPublicRoutes(app, { getAsync: async () => null, allAsync: async () => [] });
-  assert.equal(app.registrations.filter(route => route.path === '/api/health').length, 1);
+  assert.equal(app.registrations.filter(route => route.path === '/api/health/live').length, 1);
   assert.equal(app.registrations.filter(route => route.path === '/api/health/ready').length, 1);
-  assert.equal(typeof app.routes.get('/api/health'), 'function');
+  assert.equal(app.registrations.filter(route => route.path === '/api/health').length, 1);
+  assert.equal(typeof app.routes.get('/api/health/live'), 'function');
   assert.equal(typeof app.routes.get('/api/health/ready'), 'function');
+  assert.equal(typeof app.routes.get('/api/health'), 'function');
 });
