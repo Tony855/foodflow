@@ -14,7 +14,7 @@ function response() {
   };
 }
 
-function setup({ storeCount = 1, currentStoreId = 2, firstStoreId = 1, dependentTable = null, failAudit = false, sourceMenus = [], existingMenus = [], failMenuInsert = false } = {}) {
+function setup({ storeCount = 1, currentStoreId = 2, firstStoreId = 1, dependentTable = null, failAudit = false, sourceMenus = [], existingMenus = [], failMenuInsert = false, assignedStoreIds = null } = {}) {
   let createHandler;
   let deleteHandler;
   let updateHandler;
@@ -58,7 +58,8 @@ function setup({ storeCount = 1, currentStoreId = 2, firstStoreId = 1, dependent
       if (sql.includes('FROM menus WHERE store_id=? AND merchant_id=?')) return sourceMenus;
       if (sql.includes('FROM menus WHERE store_id=?')) return existingMenus;
       if (sql.includes('merchant_admin_store_access')) {
-        return Array.from({ length: storeCount }, (_, i) => ({ id: i === 0 ? firstStoreId : currentStoreId + i - 1, store_id: i === 0 ? firstStoreId : currentStoreId + i - 1 }));
+        const ids = assignedStoreIds || Array.from({ length: storeCount }, (_, i) => i === 0 ? firstStoreId : currentStoreId + i - 1);
+        return ids.map(id => ({ id, store_id: id }));
       }
       if (sql.includes('FROM stores WHERE merchant_id=?')) {
         return Array.from({ length: storeCount }, (_, i) => ({ id: i === 0 ? firstStoreId : currentStoreId + i - 1 }));
@@ -119,6 +120,7 @@ test('store creation and settings initialization roll back if audit fails', asyn
   assert.equal(ctx.rolledBack, true);
   const insertStore = ctx.calls.find(call => call.type === 'run' && call.sql.startsWith('INSERT INTO stores'));
   assert.match(insertStore.params[1], /^m5-[a-f0-9]{12}$/);
+  assert.ok(ctx.calls.some(call => call.type === 'run' && call.sql.startsWith('INSERT INTO merchant_admin_store_access')));
   assert.ok(ctx.calls.filter(call => call.type === 'run' && call.sql.startsWith('INSERT INTO settings')).every(call => call.inTransaction));
 });
 
@@ -261,4 +263,13 @@ test('disabling a store terminally suppresses queued Telegram notices in the sam
   assert.equal(suppression.inTransaction, true);
   assert.ok(ctx.calls.findIndex(call => call.type === 'run' && call.sql.includes("UPDATE telegram_notification_outbox SET state='dead'")) <
     ctx.calls.findIndex(call => call.type === 'run' && call.sql.startsWith('INSERT INTO audit_logs')));
+});
+
+
+test('sub-admin cannot update a same-merchant store outside their assignment', async () => {
+  const ctx = setup({ storeCount: 2, currentStoreId: 2, firstStoreId: 1, assignedStoreIds: [1] });
+  const res = response();
+  await ctx.updateHandler({ merchantId: 5, adminId: 7, params: { id: '2' }, body: { name: 'Unauthorized' } }, res);
+  assert.equal(res.statusCode, 403);
+  assert.equal(ctx.calls.some(call => call.type === 'run' && call.sql.startsWith('UPDATE stores')), false);
 });
