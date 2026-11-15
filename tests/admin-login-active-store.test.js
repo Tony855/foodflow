@@ -31,6 +31,8 @@ test('admin login returns the first active store, never an inactive one', async 
     getAsync: async sql => {
       if (sql.includes('FROM merchant_admins WHERE username')) return admin;
       if (sql.includes('FROM merchants WHERE id')) return { id: 9, status: 1, name: 'Merchant' };
+      if (sql.includes('FROM merchant_admins WHERE id=')) return admin;
+      if (sql.includes('MIN(id)')) return { min_id: 11 };
       if (sql.includes("admin_idle_timeout")) return null;
       if (sql.includes('FROM stores WHERE merchant_id')) {
         storeQuery = sql;
@@ -40,6 +42,7 @@ test('admin login returns the first active store, never an inactive one', async 
       if (sql.includes('FROM merchant_admins WHERE merchant_id')) return { id: 11 };
       return null;
     },
+    allAsync: async () => [],
     runAsync: async (sql, params) => {
       writes.push({ sql, params });
       return { affectedRows: 1, insertId: 1 };
