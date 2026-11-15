@@ -47,7 +47,7 @@ async function assertAdminStoreAssignment({ allAsync, adminId, merchantId, store
     [adminId, merchantId, storeId]
   );
   if (!Array.isArray(rows) || rows.length === 0) {
-    throw Object.assign(new Error('当前管理员未获授权管理该门店'), { status: 403 });
+    throw Object.assign(new Error('当前管理员未获授权管理该门店'), { status: 403, statusCode: 403 });
   }
   return true;
 }
