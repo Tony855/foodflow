@@ -9,15 +9,15 @@ async function resolveAdminStoreAccess({ getAsync, allAsync, adminId, merchantId
     const store = requestedStoreId
       ? await getAsync('SELECT id FROM stores WHERE id=? AND merchant_id=? AND active=1', [requestedStoreId, merchantId])
       : await getAsync('SELECT id FROM stores WHERE merchant_id=? AND active=1 ORDER BY id ASC LIMIT 1', [merchantId]);
-    if (!store) return { error: '商户没有可用门店，或指定门店不存在/已停用', code: 'STORE_NOT_AVAILABLE' };
+    if (!store) return { error: '商户没有可用门店，或指定门店不存在/已停用', code: 'STORE_NOT_AVAILABLE', status: 403 };
     return { storeId: Number(store.id), isPrimary: true };
   }
   const stores = await allAsync('SELECT s.id FROM merchant_admin_store_access a JOIN stores s ON s.id=a.store_id AND s.merchant_id=a.merchant_id AND s.active=1 WHERE a.admin_id=? AND a.merchant_id=? ORDER BY s.id ASC', [adminId, merchantId]);
   if (requestedStoreId) {
-    if (!stores.some(store => Number(store.id) === Number(requestedStoreId))) return { error: '当前管理员未获授权访问该门店', code: 'STORE_NOT_ASSIGNED' };
+    if (!stores.some(store => Number(store.id) === Number(requestedStoreId))) return { error: '当前管理员未获授权访问该门店', code: 'STORE_NOT_ASSIGNED', status: 403 };
     return { storeId: Number(requestedStoreId), isPrimary: false };
   }
-  if (!stores.length) return { error: '当前管理员没有已分配的有效门店', code: 'NO_ASSIGNED_ACTIVE_STORE' };
+  if (!stores.length) return { error: '当前管理员没有已分配的有效门店', code: 'NO_ASSIGNED_ACTIVE_STORE', status: 403 };
   return { storeId: Number(stores[0].id), isPrimary: false };
 }
 function normalizeStoreIds(values) {
