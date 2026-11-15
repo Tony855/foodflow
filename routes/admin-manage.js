@@ -401,14 +401,14 @@ module.exports = function(app, deps) {
   }
 
   async function assertCashierStoreAccess(req, storeId) {
-    if (!req.adminId || req.isPrimaryAdmin) return true;
+    if (!req.adminId || req.isPrimaryAdmin !== false) return true;
     await assertAdminStoreAssignment({ allAsync, adminId: req.adminId, merchantId: req.merchantId, storeId: Number(storeId) });
     return true;
   }
 
   async function getCashiersVisibleToAdmin(req) {
     const list = await getAllCashiersByMerchant(req.merchantId);
-    if (req.isPrimaryAdmin) return list;
+    if (req.isPrimaryAdmin !== false) return list;
     if (!req.adminId) return [];
     const assignments = await allAsync('SELECT store_id FROM merchant_admin_store_access WHERE admin_id=? AND merchant_id=?', [req.adminId, req.merchantId]);
     const allowed = new Set(assignments.map(row => Number(row.store_id)));
