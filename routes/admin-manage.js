@@ -6,7 +6,7 @@ const { hashSessionToken } = require('../server/services/session-token');
 const QRCode = require('qrcode');
 const { parsePositiveRouteId } = require('../server/services/route-id');
 const { safeErrorMetadata } = require('../server/middleware/safe-error-metadata');
-const { replaceAdminStoreAccess, normalizeStoreIds } = require('../server/services/admin-store-access');
+const { replaceAdminStoreAccess, normalizeStoreIds, assertActorCanAssignStores } = require('../server/services/admin-store-access');
 const { enqueueSystemAdminTelegramNotification, enqueueCustomerTelegramNotification, enqueueStoreAdminTelegramNotification } = require('../server/services/telegram-notification-enqueue');
 
 function normalizeAdminFlag(value, fallback, field) {
@@ -252,6 +252,7 @@ module.exports = function(app, deps) {
         );
         adminId = result.lastID;
         const requestedStoreIds = body.store_ids === undefined ? [req.storeId] : normalizeStoreIds(body.store_ids);
+        await assertActorCanAssignStores({ getAsync, allAsync, actorAdminId: req.adminId, merchantId, storeIds: requestedStoreIds });
         await replaceAdminStoreAccess({ runAsync, allAsync, adminId, merchantId, storeIds: requestedStoreIds });
         const actor = req.adminId ? await getAsync('SELECT username FROM merchant_admins WHERE id=? AND merchant_id=?', [req.adminId, merchantId]) : null;
         await runAsync(
@@ -326,6 +327,7 @@ module.exports = function(app, deps) {
         }
         if (requestedStoreIds !== undefined) {
           if (Number(primary?.min_id) === id) throw Object.assign(new Error('主管理员拥有全部门店权限，不可修改门店分配'), { status: 400 });
+          await assertActorCanAssignStores({ getAsync, allAsync, actorAdminId: req.adminId, merchantId, storeIds: requestedStoreIds });
           await replaceAdminStoreAccess({ runAsync, allAsync, adminId: id, merchantId, storeIds: requestedStoreIds });
           changedFields.push('store_ids');
         }
