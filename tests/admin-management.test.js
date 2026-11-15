@@ -14,7 +14,7 @@ function response() {
   };
 }
 
-function setup({ failAudit = false, primaryId = 1 } = {}) {
+function setup({ failAudit = false, primaryId = 9 } = {}) {
   let createHandler;
   let updateHandler;
   let deleteHandler;
