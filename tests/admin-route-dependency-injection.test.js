@@ -15,7 +15,7 @@ function assertRouteDependencies(routeFile, dependencies) {
   const match = serverSource.match(registration);
   assert.ok(match, `route ${routeFile} must be registered in server.js`);
   for (const dependency of dependencies) {
-    assert.match(match[1], new RegExp('\\\\b' + dependency + '\\\\b'),
+    assert.match(match[1], new RegExp('\\b' + dependency + '\\b'),
       `route ${routeFile} must receive ${dependency}`);
   }
 }
