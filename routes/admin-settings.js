@@ -51,9 +51,7 @@ module.exports = function(app, deps) {
       if (!Number.isSafeInteger(merchantId) || merchantId <= 0) return res.status(403).json({ error: '商户信息无效' });
       let isDefault = normalizeCurrencyFlag(body.is_default, 0);
       let createdCurrency;
-      failureStage = 'transaction_start';
       await withTransaction(async () => {
-        failureStage = 'merchant_lock';
         const merchant = await getAsync('SELECT id FROM merchants WHERE id=? AND status=1 FOR UPDATE', [merchantId]);
         if (!merchant) throw Object.assign(new Error('商户不存在或已停用'), { status: 403 });
         const countRow = await getAsync('SELECT COUNT(*) AS count FROM currencies WHERE merchant_id=?', [merchantId]);
@@ -304,9 +302,12 @@ module.exports = function(app, deps) {
         return res.status(400).json({ error: 'Telegram Chat ID 无效' });
       }
 
+      failureStage = 'transaction_start';
       await withTransaction(async () => {
+        failureStage = 'merchant_lock';
         const merchant = await getAsync('SELECT id FROM merchants WHERE id=? AND status=1 FOR UPDATE', [merchantId]);
         if (!merchant) throw Object.assign(new Error('商户不存在或已停用'), { status: 403 });
+        failureStage = 'store_lock';
         const store = await getAsync('SELECT id FROM stores WHERE id=? AND merchant_id=? AND active=1 FOR UPDATE', [storeId, merchantId]);
         if (!store) throw Object.assign(new Error('门店不存在或已停用'), { status: 404 });
         if (enabled) {
