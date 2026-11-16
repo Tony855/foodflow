@@ -129,7 +129,8 @@ test('rejects unsafe SQL identifiers before issuing database queries', async () 
 test('fails closed when any uniqueness-key column is nullable', async () => {
   const db = fixture({ nullableColumns: ['idempotency_key'] });
   await assert.rejects(db.run(), error => error.code === 'FINANCE_SCHEMA_NULLABLE_KEY_COLUMN');
-  assert.equal(db.reads.length, 1, 'nullable key columns are rejected before index inspection');
+  assert.equal(db.reads.length, 2, 'engine and column metadata are checked before index inspection');
+  assert.equal(db.reads.some(sql => sql.startsWith('SHOW INDEX FROM')), false);
   assert.deepEqual(db.writes, []);
 });
 
