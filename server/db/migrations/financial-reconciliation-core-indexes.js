@@ -28,7 +28,7 @@ const REVIEW_EVENT_COLUMN_CONTRACTS = Object.freeze({
   actor_username: Object.freeze({ kind: 'string', minLength: 100 }),
   action: Object.freeze({ kind: 'action' }),
   reason: Object.freeze({ kind: 'string', minLength: 500 }),
-  idempotency_key: Object.freeze({ kind: 'string', minLength: 128 }),
+  idempotency_key: Object.freeze({ kind: 'index_string', minLength: 128 }),
   request_sha256: Object.freeze({ kind: 'string', minLength: 64 }),
   before_json: Object.freeze({ kind: 'json' }),
   after_json: Object.freeze({ kind: 'json' }),
@@ -86,6 +86,10 @@ function isReviewEventColumnTypeSafe(name, column, contract) {
 
   if (contract.kind === 'string') {
     return stringCapacity(type) >= contract.minLength;
+  }
+
+  if (contract.kind === 'index_string') {
+    return (base === 'char' || base === 'varchar') && stringCapacity(type) >= contract.minLength;
   }
 
   if (contract.kind === 'action') {
