@@ -577,7 +577,7 @@ app.post('/api/orders', async (req, res) => {
         await enqueueSystemAdminTelegramNotification({
           getAsync,
           eventKey: `order:${result.lastID}:created`,
-          event: { type: 'order.created', storeName: store?.name || `Store ${finalStoreId}`, orderNo, amount: calculatedTotal, currency: 'USD' }
+          event: { type: 'order.created', storeName: store?.name || `Store ${finalStoreId}`, orderNo, amount: calculatedTotal, currency: 'USD', note }
         });
         await enqueueCustomerTelegramNotification({
           allAsync,
