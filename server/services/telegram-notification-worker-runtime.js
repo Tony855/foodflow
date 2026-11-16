@@ -58,7 +58,7 @@ function createTelegramNotificationWorker({
       try {
         const results = await processBatch({ resolveRecipient, workerId, limit: 1, leaseSeconds: 60 });
         madeProgress = Array.isArray(results) && results.some(result =>
-          result && ['delivered', 'suppressed', 'retry', 'dead'].includes(result.state)
+          result && ['delivered', 'suppressed', 'retry', 'dead', 'uncertain'].includes(result.state)
         );
       } catch (_) {
         // Never log raw Telegram responses, credentials, or untrusted exception messages.
