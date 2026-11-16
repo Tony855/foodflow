@@ -48,8 +48,8 @@ test('customer Telegram enqueue locks settings, tenant, and exact binding before
     allAsync: async (sql, params) => {
       if (sql.includes('settings')) {
         assert.match(sql, /ORDER BY `key` FOR UPDATE/);
-        assert.deepEqual(params, ['telegram_admin_bot_enabled', 'telegram_client_bot_enabled']);
-        return [{ key: 'telegram_admin_bot_enabled', value: '1' }, { key: 'telegram_client_bot_enabled', value: '1' }];
+        assert.deepEqual(params, ['telegram_admin_bot_enabled', 'telegram_admin_chat_id', 'telegram_client_bot_enabled']);
+        return [{ key: 'telegram_admin_bot_enabled', value: '1' }, { key: 'telegram_admin_chat_id', value: '-100111' }, { key: 'telegram_client_bot_enabled', value: '1' }];
       }
       if (sql.includes('FROM merchants')) {
         assert.match(sql, /FOR UPDATE/);
@@ -115,10 +115,11 @@ test('store admin enqueue locks Bot, tenant, and recipient rows before writing',
         assert.deepEqual(params, [9, 7]);
         return [{ id: 9 }];
       }
+      assert.match(sql, /SELECT id, chat_id FROM telegram_store_admin_recipients/);
       assert.match(sql, /notify_order_created=1/);
       assert.match(sql, /FOR UPDATE/);
       assert.deepEqual(params, [7, 9]);
-      return [{ id: 2 }];
+      return [{ id: 2, chat_id: '-100222' }];
     },
     enqueue: async input => { received = input; },
     merchantId: 7, storeId: 9, eventKey: 'order:1:created:store',
@@ -129,6 +130,28 @@ test('store admin enqueue locks Bot, tenant, and recipient rows before writing',
   assert.equal(received.recipientKey, 'store:9');
   assert.equal(received.merchantId, 7);
   assert.equal(received.storeId, 9);
+});
+
+
+test('store admin enqueue suppresses a duplicate when global admin targets the same Telegram chat', async () => {
+  let enqueues = 0;
+  const result = await enqueueStoreAdminTelegramNotification({
+    allAsync: async sql => {
+      if (sql.includes('settings')) return [
+        { key: 'telegram_admin_bot_enabled', value: '1' },
+        { key: 'telegram_admin_chat_id', value: '-100777' },
+        { key: 'telegram_client_bot_enabled', value: '1' }
+      ];
+      if (sql.includes('FROM merchants')) return [{ id: 7 }];
+      if (sql.includes('FROM stores')) return [{ id: 9 }];
+      return [{ id: 2, chat_id: '-100777' }];
+    },
+    enqueue: async () => { enqueues++; },
+    merchantId: 7, storeId: 9, eventKey: 'order:1:created:store',
+    event: { type: 'order.created', storeName: 'A', orderNo: '1', amount: 3, currency: 'USD' }
+  });
+  assert.equal(result, false);
+  assert.equal(enqueues, 0);
 });
 
 test('store admin enqueue fails closed when recipient or event toggle is disabled', async () => {
