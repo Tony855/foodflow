@@ -158,11 +158,18 @@ test('month validation uses strict YYYY-MM and calculates half-open UTC bounds',
 
 test('schema migration creates new tables and verifies compatibility against legacy databases', async () => {
   const writes = [];
+  const makeIndexRows = (name, columns) => columns.map((Column_name, index) => ({
+    Key_name: name, Non_unique: 0, Seq_in_index: index + 1, Column_name, Sub_part: null
+  }));
   const allAsync = async sql => {
-    if (sql === 'SHOW COLUMNS FROM financial_month_close_periods') return periodColumnNames.map(Field => ({ Field }));
-    if (sql === 'SHOW COLUMNS FROM financial_month_close_events') return eventColumnNames.map(Field => ({ Field }));
-    if (sql === 'SHOW INDEX FROM financial_month_close_periods') return [{ Key_name: 'unique_financial_month_period' }];
-    if (sql === 'SHOW INDEX FROM financial_month_close_events') return [{ Key_name: 'unique_financial_month_close_idempotency' }];
+    if (sql === 'SHOW COLUMNS FROM financial_month_close_periods') return periodColumnNames.map(Field => ({ Field, Null: 'NO' }));
+    if (sql === 'SHOW COLUMNS FROM financial_month_close_events') return eventColumnNames.map(Field => ({ Field, Null: 'NO' }));
+    if (sql === 'SHOW INDEX FROM financial_month_close_periods') {
+      return makeIndexRows('unique_financial_month_period', ['merchant_id','store_id','period_month','currency_code']);
+    }
+    if (sql === 'SHOW INDEX FROM financial_month_close_events') {
+      return makeIndexRows('unique_financial_month_close_idempotency', ['period_id','idempotency_key']);
+    }
     return [];
   };
   await ensureFinancialMonthCloseSchema({ runAsync: async sql => writes.push(sql), allAsync });

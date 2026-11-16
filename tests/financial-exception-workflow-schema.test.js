@@ -10,12 +10,22 @@ test('exception workflow schema creates tenant-scoped case and immutable event t
     if (sql.includes('SHOW COLUMNS FROM financial_reconciliation_exception_cases')) {
       return ['id','merchant_id','store_id','batch_id','item_id','status','assigned_admin_id',
         'assigned_admin_username','resolution_note','created_by_admin_id','updated_by_admin_id','created_at','updated_at']
-        .map(Field => ({ Field }));
+        .map(Field => ({ Field, Null: 'NO' }));
     }
     if (sql.includes('SHOW COLUMNS FROM financial_reconciliation_exception_events')) {
       return ['id','merchant_id','store_id','batch_id','item_id','actor_admin_id','actor_username','action',
         'reason','before_json','after_json','idempotency_key','request_sha256','previous_hash','event_hash','created_at']
-        .map(Field => ({ Field }));
+        .map(Field => ({ Field, Null: 'NO' }));
+    }
+    if (sql === 'SHOW INDEX FROM financial_reconciliation_exception_cases') {
+      return ['merchant_id','store_id','item_id'].map((Column_name, index) => ({
+        Key_name: 'unique_finance_exception_case_item', Non_unique: 0, Seq_in_index: index + 1, Column_name, Sub_part: null
+      }));
+    }
+    if (sql === 'SHOW INDEX FROM financial_reconciliation_exception_events') {
+      return ['merchant_id','store_id','item_id','idempotency_key'].map((Column_name, index) => ({
+        Key_name: 'unique_finance_exception_event_idempotency', Non_unique: 0, Seq_in_index: index + 1, Column_name, Sub_part: null
+      }));
     }
     throw new Error('unexpected SQL: ' + sql);
   };

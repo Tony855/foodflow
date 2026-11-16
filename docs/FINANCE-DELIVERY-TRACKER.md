@@ -142,3 +142,12 @@ For each batch, update this tracker with the merged PR and commit, the open PR a
 - Provider integration remains a gated, not-yet-live capability: ABA PayWay signature verification and Bakong dynamic-KHQR status lookup helpers exist, and the provider-event inbox/lease queue primitives are present, but there is no active public provider callback route or lifecycle-managed event processor that automatically settles orders and posts journal entries.
 - Remaining provider go-live work: merchant sandbox credentials and outlet/receiver mapping; verify exact outbound PayWay request signing and Bakong environment/account details; provider callback ingress with raw-body authentication and replay controls; verified-event processor; approved amount/currency/FX/accounting policy; order/refund/fee/chargeback journal posting; provider settlement reconciliation; and staging acceptance. Do not enable live callbacks or automatic settlement before these gates pass.
 - Loads above the accepted 50k benchmark are optional capacity testing, not a current release blocker. Production deployment and live financial operations remain unverified.
+
+
+## 2026-11-16 finance schema constraint audit
+
+- New migration audit found that the month-close migration accepted an index based only on its name, while exception-case/event and SLA-alert/event migrations checked required columns but did not verify their unique idempotency/deduplication indexes on an existing table.
+- The provider-neutral finance schema guard now validates non-null key columns and the exact ordered UNIQUE index definition, recognizes an equivalent exact index under another name, fails closed on same-name schema drift or duplicate legacy rows, and re-reads a concurrent startup winner before accepting it.
+- Applied to month-close period/event uniqueness, exception case/event idempotency, and SLA alert/alert-event deduplication. Existing rows are retained; no data rewrite or provider-specific payment behavior is introduced.
+- Validation added for identifier safety, non-null key columns, exact index shape, alternate legacy index names, duplicate legacy data, concurrent DDL races, and a populated legacy-schema MySQL/MariaDB migration/rerun scenario.
+- No production database migration, deployment, or financial operation was performed in this batch.

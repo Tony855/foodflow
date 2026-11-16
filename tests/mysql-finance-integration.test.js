@@ -2813,3 +2813,161 @@ test('MySQL integration: legacy assignment index migration preserves rows and fa
   );
 });
 
+
+test('MySQL integration: finance unique-index migrations repair populated legacy schemas and fail closed on drift', {
+  skip: !databaseUrl ? 'MYSQL_INTEGRATION_URL is not configured' : false,
+  timeout: 30000
+}, async t => {
+  const { connection, runAsync, allAsync } = await connectTestDatabase();
+  const tables = [
+    'financial_reconciliation_exception_alert_events',
+    'financial_reconciliation_exception_alerts',
+    'financial_reconciliation_exception_events',
+    'financial_reconciliation_exception_cases',
+    'financial_month_close_events',
+    'financial_month_close_periods'
+  ];
+  const dropTables = async () => {
+    for (const table of tables) await runAsync('DROP TABLE IF EXISTS ' + table);
+  };
+  await dropTables();
+  t.after(async () => {
+    try { await dropTables(); }
+    finally { await connection.end(); }
+  });
+
+  await runAsync(`CREATE TABLE financial_month_close_periods (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    merchant_id INT NOT NULL, store_id INT NOT NULL,
+    period_month CHAR(7) NOT NULL, currency_code CHAR(3) NOT NULL,
+    status VARCHAR(24) NOT NULL, pending_action VARCHAR(16) DEFAULT NULL,
+    pending_actor_admin_id INT DEFAULT NULL, pending_actor_username VARCHAR(100) DEFAULT NULL,
+    pending_reason VARCHAR(500) DEFAULT NULL, locked_by_admin_id INT DEFAULT NULL,
+    locked_at DATETIME(3) DEFAULT NULL, created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await runAsync(`CREATE TABLE financial_month_close_events (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT, period_id BIGINT NOT NULL,
+    merchant_id INT NOT NULL, store_id INT NOT NULL, period_month CHAR(7) NOT NULL,
+    currency_code CHAR(3) NOT NULL, action VARCHAR(32) NOT NULL,
+    actor_admin_id INT NOT NULL, actor_username VARCHAR(100) NOT NULL, reason VARCHAR(500) NOT NULL,
+    before_status VARCHAR(24) NOT NULL, after_status VARCHAR(24) NOT NULL,
+    idempotency_key VARCHAR(128) NOT NULL, request_sha256 CHAR(64) NOT NULL,
+    previous_hash CHAR(64) NOT NULL DEFAULT '', event_hash CHAR(64) NOT NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await runAsync(`CREATE TABLE financial_reconciliation_exception_cases (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT, merchant_id INT NOT NULL, store_id INT NOT NULL,
+    batch_id BIGINT NOT NULL, item_id BIGINT NOT NULL, status VARCHAR(24) NOT NULL,
+    assigned_admin_id INT DEFAULT NULL, assigned_admin_username VARCHAR(100) DEFAULT NULL,
+    resolution_note VARCHAR(500) DEFAULT NULL, created_by_admin_id INT NOT NULL,
+    updated_by_admin_id INT NOT NULL, created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await runAsync(`CREATE TABLE financial_reconciliation_exception_events (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT, merchant_id INT NOT NULL, store_id INT NOT NULL,
+    batch_id BIGINT NOT NULL, item_id BIGINT NOT NULL, actor_admin_id INT NOT NULL,
+    actor_username VARCHAR(100) NOT NULL, action VARCHAR(24) NOT NULL, reason VARCHAR(500) NOT NULL,
+    before_json JSON NOT NULL, after_json JSON NOT NULL, idempotency_key VARCHAR(128) NOT NULL,
+    request_sha256 CHAR(64) NOT NULL, previous_hash CHAR(64) NOT NULL DEFAULT '',
+    event_hash CHAR(64) NOT NULL, created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await runAsync(`CREATE TABLE financial_reconciliation_exception_alerts (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT, merchant_id INT NOT NULL, store_id INT NOT NULL,
+    batch_id BIGINT NOT NULL, item_id BIGINT NOT NULL, alert_type VARCHAR(24) NOT NULL,
+    sla_hours SMALLINT UNSIGNED NOT NULL, status VARCHAR(24) NOT NULL,
+    generated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    acknowledged_by_admin_id INT DEFAULT NULL, acknowledged_by_username VARCHAR(100) DEFAULT NULL,
+    acknowledged_at DATETIME(3) DEFAULT NULL, acknowledgement_reason VARCHAR(500) DEFAULT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await runAsync(`CREATE TABLE financial_reconciliation_exception_alert_events (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT, alert_id BIGINT NOT NULL, merchant_id INT NOT NULL,
+    store_id INT NOT NULL, actor_admin_id INT NOT NULL, actor_username VARCHAR(100) NOT NULL,
+    action VARCHAR(24) NOT NULL, reason VARCHAR(500) NOT NULL, idempotency_key VARCHAR(128) NOT NULL,
+    request_sha256 CHAR(64) NOT NULL, previous_hash CHAR(64) NOT NULL DEFAULT '',
+    event_hash CHAR(64) NOT NULL, created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+  // Seed existing rows before running the compatibility migration.
+  await runAsync(`INSERT INTO financial_month_close_periods
+    (merchant_id,store_id,period_month,currency_code,status) VALUES (4,9,'2026-11','USD','open')`);
+  await runAsync(`INSERT INTO financial_month_close_events
+    (period_id,merchant_id,store_id,period_month,currency_code,action,actor_admin_id,actor_username,reason,
+     before_status,after_status,idempotency_key,request_sha256,event_hash)
+    VALUES (1,4,9,'2026-11','USD','request_close',7,'finance-a','close evidence',
+     'open','close_pending','month-event-key-0001',REPEAT('a',64),REPEAT('b',64))`);
+  await runAsync(`INSERT INTO financial_reconciliation_exception_cases
+    (merchant_id,store_id,batch_id,item_id,status,created_by_admin_id,updated_by_admin_id)
+    VALUES (4,9,12,31,'open',7,7)`);
+  await runAsync(`INSERT INTO financial_reconciliation_exception_events
+    (merchant_id,store_id,batch_id,item_id,actor_admin_id,actor_username,action,reason,before_json,after_json,
+     idempotency_key,request_sha256,event_hash)
+    VALUES (4,9,12,31,7,'finance-a','assign','assign for review','{}','{}',
+     'case-event-key-0001',REPEAT('c',64),REPEAT('d',64))`);
+  await runAsync(`INSERT INTO financial_reconciliation_exception_alerts
+    (merchant_id,store_id,batch_id,item_id,alert_type,sla_hours,status)
+    VALUES (4,9,12,31,'sla_overdue',24,'pending')`);
+  await runAsync(`INSERT INTO financial_reconciliation_exception_alert_events
+    (alert_id,merchant_id,store_id,actor_admin_id,actor_username,action,reason,idempotency_key,request_sha256,event_hash)
+    VALUES (1,4,9,7,'finance-a','generated','SLA alert generated',
+     'alert-event-key-0001',REPEAT('e',64),REPEAT('f',64))`);
+
+  await ensureFinancialMonthCloseSchema({ runAsync, allAsync });
+  await ensureFinancialExceptionWorkflowSchema({ runAsync, allAsync });
+  await ensureFinancialExceptionAlertSchema({ runAsync, allAsync });
+
+  const expected = [
+    ['financial_month_close_periods','unique_financial_month_period',['merchant_id','store_id','period_month','currency_code']],
+    ['financial_month_close_events','unique_financial_month_close_idempotency',['period_id','idempotency_key']],
+    ['financial_reconciliation_exception_cases','unique_finance_exception_case_item',['merchant_id','store_id','item_id']],
+    ['financial_reconciliation_exception_events','unique_finance_exception_event_idempotency',['merchant_id','store_id','item_id','idempotency_key']],
+    ['financial_reconciliation_exception_alerts','unique_finance_exception_alert',['merchant_id','store_id','item_id','alert_type','sla_hours']],
+    ['financial_reconciliation_exception_alert_events','unique_finance_exception_alert_event',['alert_id','idempotency_key']]
+  ];
+  for (const [table, name, columns] of expected) {
+    const rows = (await allAsync('SHOW INDEX FROM ' + table))
+      .filter(row => row.Key_name === name)
+      .sort((left, right) => Number(left.Seq_in_index) - Number(right.Seq_in_index));
+    assert.equal(rows.length, columns.length, table + ' must have the exact unique index');
+    assert.ok(rows.every(row => Number(row.Non_unique) === 0 && (row.Sub_part === null || row.Sub_part === undefined)));
+    assert.deepEqual(rows.map(row => row.Column_name), columns);
+  }
+
+  // A second startup pass must preserve every pre-existing row.
+  await ensureFinancialMonthCloseSchema({ runAsync, allAsync });
+  await ensureFinancialExceptionWorkflowSchema({ runAsync, allAsync });
+  await ensureFinancialExceptionAlertSchema({ runAsync, allAsync });
+  for (const table of tables) {
+    const rows = await allAsync('SELECT COUNT(*) AS row_count FROM ' + table);
+    assert.equal(Number(rows[0].row_count), 1, table + ' data must survive migration reruns');
+  }
+
+  // Nullable legacy key columns cannot enforce true idempotency with MySQL UNIQUE semantics.
+  await runAsync('ALTER TABLE financial_reconciliation_exception_alerts DROP INDEX unique_finance_exception_alert');
+  await runAsync('ALTER TABLE financial_reconciliation_exception_alerts MODIFY COLUMN alert_type VARCHAR(24) NULL');
+  await assert.rejects(
+    ensureFinancialExceptionAlertSchema({ runAsync, allAsync }),
+    error => error.code === 'FINANCE_SCHEMA_NULLABLE_KEY_COLUMN'
+  );
+  await runAsync('ALTER TABLE financial_reconciliation_exception_alerts MODIFY COLUMN alert_type VARCHAR(24) NOT NULL');
+  await ensureFinancialExceptionAlertSchema({ runAsync, allAsync });
+
+  // Same-name schema drift must not be mistaken for a valid uniqueness guarantee.
+  await runAsync('ALTER TABLE financial_month_close_periods DROP INDEX unique_financial_month_period');
+  await runAsync('CREATE INDEX unique_financial_month_period ON financial_month_close_periods (merchant_id)');
+  await assert.rejects(
+    ensureFinancialMonthCloseSchema({ runAsync, allAsync }),
+    error => error.code === 'FINANCE_SCHEMA_INDEX_DRIFT'
+  );
+
+  // Duplicate legacy idempotency keys must stop startup before a replacement index is created.
+  await runAsync('ALTER TABLE financial_reconciliation_exception_alert_events DROP INDEX unique_finance_exception_alert_event');
+  await runAsync(`INSERT INTO financial_reconciliation_exception_alert_events
+    (alert_id,merchant_id,store_id,actor_admin_id,actor_username,action,reason,idempotency_key,request_sha256,event_hash)
+    VALUES (1,4,9,8,'finance-b','generated','duplicate legacy event',
+     'alert-event-key-0001',REPEAT('1',64),REPEAT('2',64))`);
+  await assert.rejects(
+    ensureFinancialExceptionAlertSchema({ runAsync, allAsync }),
+    error => error.code === 'FINANCE_SCHEMA_DUPLICATE_DATA'
+  );
+});
