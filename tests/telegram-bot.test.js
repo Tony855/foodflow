@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validateBotToken, validateChatId, sendTelegramTestMessage, getTelegramBotUsername } = require('../server/services/telegram-bot');
+const { validateBotToken, validateChatId, sendTelegramTestMessage, sendTelegramMessage, getTelegramBotUsername } = require('../server/services/telegram-bot');
 
 const token = '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi';
 const validPayload = { ok: true, result: { message_id: 17, chat: { id: -100123 } } };
@@ -74,4 +74,23 @@ test('resolves the configured Bot username for a deep-link without exposing API 
   assert.equal(username, 'FoodFlowClientBot');
   assert.equal(requestedUrl, 'https://api.telegram.org/bot' + token + '/getMe');
   await assert.rejects(() => getTelegramBotUsername({ token, fetchImpl: async () => ({ ok: false, json: async () => ({ ok: false, description: token }) }) }), /Bot 信息读取失败/);
+});
+
+test('marks network timeouts, unreadable responses and HTTP 5xx as ambiguous delivery outcomes', async () => {
+  await assert.rejects(
+    () => sendTelegramMessage({ token, chatId: '-100123', text: 'hello', fetchImpl: async () => { throw new Error('socket timeout'); } }),
+    error => error.deliveryUncertain === true && !error.message.includes(token)
+  );
+  await assert.rejects(
+    () => sendTelegramMessage({ token, chatId: '-100123', text: 'hello', fetchImpl: async () => ({ ok: true, status: 200, json: async () => { throw new Error('bad json'); } }) }),
+    error => error.deliveryUncertain === true
+  );
+  await assert.rejects(
+    () => sendTelegramMessage({ token, chatId: '-100123', text: 'hello', fetchImpl: async () => ({ ok: false, status: 502, json: async () => ({ ok: false, error_code: 502 }) }) }),
+    error => error.deliveryUncertain === true
+  );
+  await assert.rejects(
+    () => sendTelegramMessage({ token, chatId: '-100123', text: 'hello', fetchImpl: async () => ({ ok: false, status: 429, json: async () => ({ ok: false, error_code: 429, parameters: { retry_after: 5 } }) }) }),
+    error => error.deliveryUncertain !== true && error.retryAfterSeconds === 5
+  );
 });
