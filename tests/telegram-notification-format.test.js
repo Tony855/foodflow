@@ -11,7 +11,15 @@ test('formats allowlisted order events with bounded fields only', () => {
       amount: 12.5, currency: 'USD', customerToken: 'must-not-appear',
       note: '不要香菜、少辣'
     }),
-    '🍽️ <b>FoodFlow · 新订单</b>\n━━━━━━━━━━━━━━━━━━\n🏪 <b>门店</b>：Phnom Penh\n🧾 <b>订单</b>：<code>11001</code>\n📝 <b>顾客备注</b>：\n<blockquote>不要香菜、少辣</blockquote>\n💰 <b>金额</b>：<b>12.50 USD</b>\n━━━━━━━━━━━━━━━━━━\n<i>FoodFlow · 智能订单通知</i>
+    `🍽️ <b>FoodFlow · 新订单</b>
+━━━━━━━━━━━━━━━━━━
+🏪 <b>门店</b>：Phnom Penh
+🧾 <b>订单</b>：<code>11001</code>
+📝 <b>顾客备注</b>：
+<blockquote>不要香菜、少辣</blockquote>
+💰 <b>金额</b>：<b>12.50 USD</b>
+━━━━━━━━━━━━━━━━━━
+<i>FoodFlow · 智能订单通知</i>`
   );
   assert.equal(
     formatTelegramBusinessNotification({
@@ -27,7 +35,7 @@ test('formats refund amount without exposing reason or notes', () => {
     type: 'order.refunded', storeName: 'Store B', orderNo: '11003',
     refundAmount: 4.25, currency: 'USD', reason: 'private reason', note: 'private note'
   });
-  assert.match(message, /退款金额：4\.25 USD/);
+  assert.match(message, /<b>退款金额<\/b>：<b>4\.25 USD<\/b>/);
   assert.equal(message.includes('private'), false);
 });
 
