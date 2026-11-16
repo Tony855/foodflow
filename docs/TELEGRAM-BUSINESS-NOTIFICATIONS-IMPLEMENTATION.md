@@ -10,7 +10,7 @@ Automated CI and database integration coverage passed on the merged implementati
 
 ## Notification scopes and routing
 
-- **Global super-admin:** the existing global Admin Bot configuration and global Chat ID remain available for system-wide notices.
+- **Global super-admin:** configures only the shared Admin Bot token and enabled state. The super-admin has no business-notification Chat ID and does not receive store business messages.
 - **Store admin:** each active merchant/store can configure its own Chat ID and event toggles in the Admin settings page. The delivery uses the globally configured Admin Bot token; it does not create a separate Bot token per merchant. Recipient lookup joins the recipient row to the exact active store and merchant before delivery.
 - **Customer:** the existing global Client Bot token is used, but each customer's private Telegram chat is resolved through a one-time binding to the hashed customer-token identity and exact store. The shared Client Bot Chat ID is never used for personal order details.
 
@@ -46,7 +46,7 @@ The current refund route performs and records the refund in one transaction; the
 - Enqueue serializes against Bot/store disable and customer opt-out with a stable row-lock order: both global Bot-enabled settings in sorted key order, merchant, store, binding/recipient, then outbox. Customer `/stop`, page revoke, store/merchant deletion, full reset, and backup restore lock challenge/binding rows before outbox cleanup. This prevents concurrent order transactions from inserting stale notifications after a disable/revoke has committed.
 - The worker runs one delivery at a time with a bounded Telegram request timeout. It is started only when `TELEGRAM_NOTIFICATION_WORKER_ENABLED=true`; the default is off. Graceful shutdown stops the worker before closing MySQL.
 - Delivery is **at-least-once**. If Telegram accepts a message and the process crashes before the outbox acknowledgement, a retry after lease expiry may send a duplicate.
-- Disabling the global Client Bot terminally dead-letters queued customer notices; disabling the global Admin Bot terminally dead-letters queued system-admin and store-admin notices in the same settings transaction. Disabling a store or an individual store event toggle likewise dead-letters only that store's matching queued notices in the same transaction. Re-enabling a Bot, store, or event toggle cannot release that disabled-period backlog. A Telegram request already in flight cannot be recalled.
+- Disabling the global Client Bot terminally dead-letters queued customer notices; disabling the global Admin Bot terminally dead-letters queued legacy system-admin and store-admin notices in the same settings transaction. Disabling a store or an individual store event toggle likewise dead-letters only that store's matching queued notices in the same transaction. Re-enabling a Bot, store, or event toggle cannot release that disabled-period backlog. A Telegram request already in flight cannot be recalled.
 - Retention cleanup removes delivered history after 90 days and dead-letter history after 180 days. Telegram webhook update IDs are pruned after 30 days.
 
 ## Backup and restore
@@ -68,7 +68,7 @@ Backups include the outbox, customer-binding records, webhook update IDs, and st
 
 - Create the Client Bot and Admin Bot separately with Telegram's official BotFather. Keep their tokens independent; never paste tokens into issue comments, screenshots, chat messages, or committed environment files.
 - The Client Bot is the only Bot customers should open. Customers start it using the one-time deep link generated from their active FoodFlow customer session. The bot accepts private-chat `/start <one-time-challenge>` and `/stop` commands only; it does not accept arbitrary customer IDs or bearer tokens in Telegram commands.
-- The Admin Bot is added to the target admin group. A super-admin configures its global destination in Super Admin settings; each store admin separately configures that store's group Chat ID and event toggles. A store does not receive its own Bot token.
+- The Admin Bot is added to each store's target group. The super-admin configures only the shared Bot token; each store separately configures its own group Chat ID and event toggles. The super-admin does not configure a business-notification destination, and a store does not receive its own Bot token.
 - Do not configure the shared Client Bot Chat ID as a customer destination. Customer order notifications must resolve from an active, owner-checked binding.
 - Bot tokens are currently stored in the protected `settings` table as plaintext; the Super Admin API masks them, but there is no application-level encryption at rest. Backups include the `settings` table and therefore contain Bot tokens. Treat database backups as secrets: retain automatic files with restrictive permissions, encrypt off-host copies, and never attach backup files to tickets or chats. Application-level token encryption remains a security-hardening item.
 
@@ -97,7 +97,7 @@ The sample uses a placeholder domain; replace it with the actual HTTPS origin. P
 - **Webhook returns 403:** verify the reverse proxy preserves `X-Telegram-Bot-Api-Secret-Token` and the configured secret matches byte-for-byte. Do not log the header.
 - **Webhook cannot be reached:** verify public HTTPS, certificate validity, reverse-proxy routing to `POST /api/telegram/client/webhook`, and that the application route is mounted.
 - **Customer binding does not complete:** confirm the customer still has an active scan session, the one-time challenge has not expired or been consumed, and the Client Bot is enabled. Generate a fresh link rather than reusing an old one.
-- **Admin group receives nothing:** verify the Admin Bot is enabled, is a member of the configured group, can send messages, the Chat ID is correct, and the store's relevant event toggle is on.
+- **Store group receives nothing:** verify the Admin Bot is enabled, is a member of that store's configured group, can send messages, the store Chat ID is correct, and the relevant event toggle is on.
 - **Customer receives nothing:** verify the Client Bot is enabled and the customer has an active binding for the same merchant and store as the order. The shared Client Bot Chat ID is not a fallback.
 - **Messages remain pending or retry:** verify outbound HTTPS connectivity to `api.telegram.org`, Bot token validity, and the worker's opt-in environment flag. The business transaction does not wait for Telegram delivery.
 - **Dead-letter entries:** inspect the safe `last_error_code` and attempt count using an authorized operational database session. Do not expose Bot tokens, webhook secrets, raw Telegram payloads, or customer bearer values in support logs.
@@ -107,7 +107,7 @@ The worker's safe log messages identify a failed cleanup or batch without printi
 
 ### Safe operational diagnostics
 
-Run `npm run telegram:diagnose` from the application root. The command reads the application's `.env`, checks the worker flag and webhook-secret length, reports whether the two Bot profiles and global Admin Chat ID are configured, counts active customer bindings and enabled store recipients, summarizes outbox states, and checks the Client Bot webhook with Telegram's `getWebhookInfo` API. It deliberately does not print Bot tokens, Chat IDs, webhook secrets, notification payloads, or raw database errors. If a notification table is missing, its section reports `available: false` rather than exposing database details.
+Run `npm run telegram:diagnose` from the application root. The command reads the application's `.env`, checks the worker flag and webhook-secret length, reports whether the two Bot profiles are configured, counts active customer bindings and enabled store recipients, summarizes outbox states, and checks the Client Bot webhook with Telegram's `getWebhookInfo` API. It deliberately does not print Bot tokens, Chat IDs, webhook secrets, notification payloads, or raw database errors. If a notification table is missing, its section reports `available: false` rather than exposing database details.
 
 Interpret zero active customer bindings as customers not yet linked through the customer-page Telegram button and `/start` flow. Interpret zero enabled store recipients as stores not yet configured with their own Chat ID and event toggles. A registered webhook does not create either kind of recipient.
 
