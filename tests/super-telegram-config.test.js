@@ -73,7 +73,7 @@ test('configuration update preserves a blank token and writes separate scopes at
   await ctx.routes.get('PUT /api/super/telegram/config')({
     body: {
       client: { enabled: true, token: '', chat_id: '-100123' },
-      admin: { enabled: false, token: '987654:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', chat_id: '12345' }
+      admin: { enabled: false, token: '987654:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi' }
     },
     superAdmin: { id: 1, username: 'root' }
   }, res);
@@ -82,6 +82,7 @@ test('configuration update preserves a blank token and writes separate scopes at
   assert.equal(ctx.settings.get('telegram_client_chat_id'), '-100123');
   assert.equal(ctx.settings.get('telegram_client_bot_enabled'), '1');
   assert.equal(ctx.settings.get('telegram_admin_bot_enabled'), '0');
+  assert.equal(ctx.settings.has('telegram_admin_chat_id'), false);
 });
 
 test('rejects invalid tokens and enabled bots without a complete stored configuration', async () => {
@@ -90,7 +91,7 @@ test('rejects invalid tokens and enabled bots without a complete stored configur
   await ctx.routes.get('PUT /api/super/telegram/config')({
     body: {
       client: { enabled: false, token: 'not-a-token', chat_id: '' },
-      admin: { enabled: false, token: '', chat_id: '' }
+      admin: { enabled: false, token: '' }
     }
   }, invalid);
   assert.equal(invalid.statusCode, 400);
@@ -111,14 +112,13 @@ test('disabling Client Bot terminally suppresses only queued customer notificati
     telegram_client_bot_token: token,
     telegram_client_chat_id: '-100123',
     telegram_admin_bot_enabled: '1',
-    telegram_admin_bot_token: token,
-    telegram_admin_chat_id: '12345'
+    telegram_admin_bot_token: token
   });
   const res = response();
   await ctx.routes.get('PUT /api/super/telegram/config')({
     body: {
       client: { enabled: false, token: '', chat_id: '-100123' },
-      admin: { enabled: true, token: '', chat_id: '12345' }
+      admin: { enabled: true, token: '' }
     },
     superAdmin: { id: 1, username: 'root' }
   }, res);
@@ -144,7 +144,7 @@ test('disabling Admin Bot terminally suppresses global and store notices but pre
   await ctx.routes.get('PUT /api/super/telegram/config')({
     body: {
       client: { enabled: true, token: '', chat_id: '-100123' },
-      admin: { enabled: false, token: '', chat_id: '12345' }
+      admin: { enabled: false, token: '' }
     },
     superAdmin: { id: 1, username: 'root' }
   }, res);
@@ -175,8 +175,8 @@ test('test endpoint sends only for enabled, saved bot configuration', async () =
       params: {}
     }, res);
     assert.equal(res.statusCode, 200);
-    assert.deepEqual(res.body, { success: true, message_id: 22 });
-    assert.equal(request.url, 'https://api.telegram.org/bot' + token + '/sendMessage');
+    assert.deepEqual(res.body, { success: true, bot_username: 'foodflow_test_bot' });
+    assert.equal(request.url, 'https://api.telegram.org/bot' + token + '/getMe');
   } finally {
     global.fetch = oldFetch;
   }
