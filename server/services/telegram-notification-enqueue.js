@@ -60,18 +60,28 @@ async function enqueueStoreAdminTelegramNotification({ allAsync, merchantId, sto
 
   // Lock the same setting/tenant/recipient rows that the disable route updates.
   // This prevents an enqueue racing past a disable-and-re-enable cycle.
-  const settings = await allAsync('SELECT `key`, value FROM settings WHERE `key` IN (?, ?) ORDER BY `key` FOR UPDATE', ['telegram_admin_bot_enabled', 'telegram_client_bot_enabled']);
+  const settings = await allAsync('SELECT `key`, value FROM settings WHERE `key` IN (?, ?, ?) ORDER BY `key` FOR UPDATE', ['telegram_admin_bot_enabled', 'telegram_admin_chat_id', 'telegram_client_bot_enabled']);
   const adminBot = Array.isArray(settings) ? settings.find(row => row.key === 'telegram_admin_bot_enabled') : null;
+  const systemAdminChat = Array.isArray(settings) ? settings.find(row => row.key === 'telegram_admin_chat_id') : null;
   if (adminBot?.value !== '1') return false;
   const merchants = await allAsync('SELECT id FROM merchants WHERE id=? AND status=1 FOR UPDATE', [merchant]);
   if (!Array.isArray(merchants) || !merchants.length) return false;
   const stores = await allAsync('SELECT id FROM stores WHERE id=? AND merchant_id=? AND active=1 FOR UPDATE', [store, merchant]);
   if (!Array.isArray(stores) || !stores.length) return false;
   const recipients = await allAsync(
-    `SELECT id FROM telegram_store_admin_recipients WHERE merchant_id=? AND store_id=? AND is_enabled=1 AND ${toggle}=1 LIMIT 1 FOR UPDATE`,
+    `SELECT id, chat_id FROM telegram_store_admin_recipients WHERE merchant_id=? AND store_id=? AND is_enabled=1 AND ${toggle}=1 LIMIT 1 FOR UPDATE`,
     [merchant, store]
   );
   if (!Array.isArray(recipients) || !recipients.length) return false;
+
+  // Both admin scopes use the same Bot token. If they target the same Telegram
+  // chat, enqueue only the system-admin copy for this order event. The event
+  // call sites enqueue system-admin first, so this check prevents a second
+  // identical message without suppressing notifications to distinct chats.
+  const systemChatId = String(systemAdminChat?.value || '').trim();
+  const storeChatId = String(recipients[0].chat_id || '').trim();
+  if (systemChatId && storeChatId && systemChatId === storeChatId) return false;
+
   const enqueueNotification = enqueue || require('./telegram-notification-outbox').enqueueTelegramNotification;
   await enqueueNotification({ eventKey, recipientScope: 'merchant_store', recipientKey: `store:${store}`, merchantId: merchant, storeId: store, event });
   return true;
