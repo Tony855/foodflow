@@ -24,7 +24,6 @@ async function collectTelegramDiagnostics({ allAsync, env = process.env, fetchIm
     [
       'telegram_admin_bot_enabled',
       'telegram_admin_bot_token',
-      'telegram_admin_chat_id',
       'telegram_client_bot_enabled',
       'telegram_client_bot_token',
       'telegram_client_chat_id'
@@ -97,7 +96,7 @@ async function collectTelegramDiagnostics({ allAsync, env = process.env, fetchIm
       admin: {
         enabled: settings.telegram_admin_bot_enabled === '1',
         tokenConfigured: Boolean(adminToken),
-        globalChatConfigured: Boolean(settings.telegram_admin_chat_id)
+        businessRecipientMode: 'store_chat_id_only'
       },
       client: {
         enabled: settings.telegram_client_bot_enabled === '1',
