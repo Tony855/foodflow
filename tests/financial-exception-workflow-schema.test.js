@@ -7,6 +7,7 @@ const { ensureFinancialExceptionWorkflowSchema } = require('../server/db/migrati
 test('exception workflow schema creates tenant-scoped case and immutable event tables', async () => {
   const statements = [];
   const allAsync = async sql => {
+    if (sql.startsWith('SELECT ENGINE FROM information_schema.TABLES')) return [{ ENGINE: 'InnoDB' }];
     if (sql.includes('SHOW COLUMNS FROM financial_reconciliation_exception_cases')) {
       return ['id','merchant_id','store_id','batch_id','item_id','status','assigned_admin_id',
         'assigned_admin_username','resolution_note','created_by_admin_id','updated_by_admin_id','created_at','updated_at']

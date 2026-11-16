@@ -162,6 +162,7 @@ test('schema migration creates new tables and verifies compatibility against leg
     Key_name: name, Non_unique: 0, Seq_in_index: index + 1, Column_name, Sub_part: null
   }));
   const allAsync = async sql => {
+    if (sql.startsWith('SELECT ENGINE FROM information_schema.TABLES')) return [{ ENGINE: 'InnoDB' }];
     if (sql === 'SHOW COLUMNS FROM financial_month_close_periods') return periodColumnNames.map(Field => ({ Field, Null: 'NO' }));
     if (sql === 'SHOW COLUMNS FROM financial_month_close_events') return eventColumnNames.map(Field => ({ Field, Null: 'NO' }));
     if (sql === 'SHOW INDEX FROM financial_month_close_periods') {

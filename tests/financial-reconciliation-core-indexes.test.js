@@ -44,6 +44,7 @@ function fixture({ indexes = {}, duplicates = {}, overrides = {} } = {}) {
   const writes = [];
   const allAsync = async sql => {
     reads.push(sql);
+    if (sql.startsWith('SELECT ENGINE FROM information_schema.TABLES')) return [{ ENGINE: 'InnoDB' }];
     const columnMatch = sql.match(/^SHOW COLUMNS FROM ([A-Za-z0-9_]+)$/);
     if (columnMatch) {
       const table = columnMatch[1];

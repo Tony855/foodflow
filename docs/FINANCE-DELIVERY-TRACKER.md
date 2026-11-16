@@ -155,7 +155,7 @@ For each batch, update this tracker with the merged PR and commit, the open PR a
 
 ## 2026-11-16 core reconciliation schema audit
 
-- PR [#288](https://github.com/Tony855/shaolafang/pull/288) merged as `58e79a2c9739dc93f0c09f6285445e4c66449edd`; its PR-head CI and installer matrix passed, and the post-merge main workflows were started.
+- PR [#288](https://github.com/Tony855/shaolafang/pull/288) merged as `58e79a2c9739dc93f0c09f6285445e4c66449edd`; its PR-head CI, installer matrix, and post-merge main CI/installer workflows all passed.
 - Follow-up review found that the original bank-statement batch key, statement-row key, and immutable review-event idempotency key were declared in fresh CREATE TABLE definitions but were not explicitly validated on already-existing tables.
-- Added a startup guard for `unique_reconciliation_batch`, `unique_reconciliation_row`, and `unique_finance_review_idempotency`. It also verifies that immutable review records retain actor, timestamp, reason, before/after JSON, request hash, and event hash columns with the required nullability.
+- Added a startup guard for `unique_reconciliation_batch`, `unique_reconciliation_row`, and `unique_finance_review_idempotency`. It also verifies InnoDB transactional engines and that immutable review records retain actor, timestamp, reason, before/after JSON, request hash, and event hash columns with the required nullability.
 - Duplicate legacy import/review keys, missing audit fields, or incompatible nullability fail closed. Existing statement rows and audit events are not rewritten or synthesized.
