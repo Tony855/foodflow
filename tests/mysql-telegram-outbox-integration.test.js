@@ -46,7 +46,7 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   await runAsync('DROP TABLE IF EXISTS telegram_customer_binding_challenges');
   await runAsync('DROP TABLE IF EXISTS telegram_notification_outbox');
   await ensureTelegramNotificationOutboxSchema({ runAsync, getAsync });
-  await ensureTelegramNotificationOutboxSchema({ runAsync });
+  await ensureTelegramNotificationOutboxSchema({ runAsync, getAsync });
   await ensureTelegramCustomerBindingSchema({ runAsync });
   await ensureTelegramCustomerBindingSchema({ runAsync });
   await ensureTelegramStoreAdminRecipientSchema({ runAsync });
