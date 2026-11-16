@@ -121,7 +121,7 @@ function buildBatchReceipt(orders, store, printer) {
   if (store?.address) { pos.font(1); pos.line(store.address); pos.font(0); }
   pos.separator('='); pos.newline();
   pos.align(0);
-  pos.twoColumn('桌号:', tableName);
+  pos.twoColumn('座号:', tableName);
   pos.twoColumn('订单数:', String(orders.length));
   pos.twoColumn('时间:', formatGlobalDateTime(new Date().toISOString()));
   pos.separator();
@@ -157,7 +157,7 @@ function buildKitchenTicket(order, store, printer) {
 
   pos.init();
 
-  // ===== 顶部：桌号 + 订单号同行居中加粗 =====
+  // ===== 顶部：座号 + 订单号同行居中加粗 =====
   pos.align(1);
   pos.bold(true);
   pos.line(`${order.table || '-'}   #${order.order_no || order.id}`);
