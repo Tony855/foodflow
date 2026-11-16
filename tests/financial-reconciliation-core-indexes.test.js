@@ -40,6 +40,13 @@ function indexRows(name, columns, nonUnique = 0) {
 
 const reviewEventTypes = {
   id: 'bigint(20)',
+  merchant_id: 'int(11)',
+  store_id: 'int(11)',
+  batch_id: 'bigint(20)',
+  item_id: 'bigint(20)',
+  journal_transaction_id: 'bigint(20)',
+  exception_category: "enum('refund','fee','settlement_difference','chargeback','other')",
+  actor_admin_id: 'int(11)',
   actor_username: 'varchar(100)',
   action: "enum('confirm','reject','release','reassign','classify_exception')",
   reason: 'varchar(500)',
@@ -219,6 +226,27 @@ test('rejects TEXT idempotency keys that cannot back the required full unique in
   const db = fixture({ overrides: {
     'financial_reconciliation_review_events:type': {
       idempotency_key: 'text'
+    }
+  }});
+  await assert.rejects(db.run(), error => error.code === 'FINANCE_REVIEW_EVENT_SCHEMA_TYPE_DRIFT');
+  assert.deepEqual(db.writes, []);
+});
+
+
+test('requires all supported manual exception categories in legacy review-event enums', async () => {
+  const db = fixture({ overrides: {
+    'financial_reconciliation_review_events:type': {
+      exception_category: "enum('refund','fee','chargeback','other')"
+    }
+  }});
+  await assert.rejects(db.run(), error => error.code === 'FINANCE_REVIEW_EVENT_SCHEMA_TYPE_DRIFT');
+  assert.deepEqual(db.writes, []);
+});
+
+test('rejects non-integer tenant, actor, and journal reference columns', async () => {
+  const db = fixture({ overrides: {
+    'financial_reconciliation_review_events:type': {
+      merchant_id: 'varchar(20)'
     }
   }});
   await assert.rejects(db.run(), error => error.code === 'FINANCE_REVIEW_EVENT_SCHEMA_TYPE_DRIFT');
