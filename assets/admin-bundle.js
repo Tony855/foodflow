@@ -590,3 +590,744 @@ window.closeWaiterEdit = closeWaiterEdit;
 
 })();
 
+
+/* ========== pages/admin/currency.js ========== */
+/*
+ * pages/admin/currency.js — 货币管理模块
+ */
+(function(){
+'use strict';
+
+const ctx = window.SLF.admin;
+if (!ctx) return;
+
+const { $, api, tAdmin, esc, hasPermission, showConfirm } = ctx;
+
+let editingCurrencyId = null;
+
+function currencyNameText(name, code) {
+  const map = {
+    en: { USD: 'US Dollar', CNY: 'Chinese Yuan', VND: 'Vietnamese Dong', THB: 'Thai Baht', KHR: 'Cambodian Riel' },
+    vi: { USD: 'Đô la Mỹ', CNY: 'Nhân dân tệ', VND: 'Đồng', THB: 'Bạt Thái', KHR: 'Riel' },
+    th: { USD: 'ดอลลาร์สหรัฐ', CNY: 'หยวนจีน', VND: 'ดองเวียดนาม', THB: 'บาทไทย', KHR: 'เรียลกัมพูชา' },
+    km: { USD: 'ដុល្លារអាមេរិក', CNY: 'យ័នចិន', VND: 'ដុងវៀតណាម', THB: 'បាតថៃ', KHR: 'រៀលខ្មែរ' },
+    zh: { USD: '美元', CNY: '人民币', VND: '越南盾', THB: '泰铢', KHR: '柬埔寨瑞尔' }
+  };
+  return (map[SLF.store.rawGet('adminLang') || 'zh'] && map[SLF.store.rawGet('adminLang') || 'zh'][code]) || name;
+}
+
+async function loadCurrencies() {
+  const list = await api('/currencies');
+  if (window.SLF.admin.setCurrencies) window.SLF.admin.setCurrencies(list);
+  const defaultCurrency = list.find(c => c.is_default) || list[0] || null;
+  // 配置 SLF.money
+  if (typeof SLF !== 'undefined' && SLF.money) {
+    // 从后端读取当前店铺的货币配置
+    let prim = defaultCurrency;
+    let sec = null;
+    try {
+      const ds = await api('/admin/display-settings');
+      if (ds.primaryCurrencyCode) {
+        prim = list.find(c => c.code === ds.primaryCurrencyCode) || defaultCurrency;
+      }
+      if (ds.secondaryCurrencyCode) {
+        sec = list.find(c => c.code === ds.secondaryCurrencyCode) || null;
+      }
+    } catch (e) { console.warn('读 display-settings 失败', e); }
+    SLF.money.configure({
+      currencies: list,
+      primaryCurrency: prim,
+      secondaryCurrency: sec
+    });
+  }
+  const defaultCode = defaultCurrency?.code || 'USD';
+  $('#menuCurrency').innerHTML = list.map(c => `<option value="${esc(c.code)}">${esc(c.code)} · ${esc(c.symbol)} · ${esc(currencyNameText(c.name,c.code))}</option>`).join('');
+  // 旧货币列表渲染已下线（统一走"系统设置 → 货币设置"卡片）
+  return list;
+}
+
+async function editCurrency(id) {
+  const data = await api('/currencies');
+  const c = data.find(x => String(x.id) === String(id));
+  if (!c) return;
+  editingCurrencyId = id;
+  $('#editCurrencyId').value = id;
+  $('#editCurrencyCode').value = c.code || '';
+  $('#editCurrencyName').value = c.name || '';
+  $('#editCurrencySymbol').value = c.symbol || '';
+  $('#editCurrencyRate').value = c.rate || 1;
+  $('#currencyEditTitle').textContent = tAdmin('editCurrency') + ' - ' + (c.code || '');
+  $('#currencyEditModal').classList.add('open');
+}
+
+function closeCurrencyEdit() { $('#currencyEditModal').classList.remove('open'); editingCurrencyId = null; }
+
+async function saveCurrencyEdit() {
+  const id = editingCurrencyId;
+  if (!id) return;
+  const name = $('#editCurrencyName').value.trim();
+  const symbol = $('#editCurrencySymbol').value.trim();
+  const rate = parseFloat($('#editCurrencyRate').value) || 1;
+  try {
+    await api('/currencies/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: { name, symbol, rate } });
+    closeCurrencyEdit();
+    await loadCurrencies();
+    SLF.ui.toast('✅ ' + tAdmin('currencyManageTitle') + ' ' + tAdmin('updated'));
+  } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+}
+
+async function setDefaultCurrency(id) {
+  const data = await api('/currencies');
+  const c = data.find(x => String(x.id) === String(id));
+  try {
+    await api('/currencies/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: { ...c, is_default: true } });
+    await loadCurrencies();
+    SLF.ui.toast('✅ ' + tAdmin('currencyManageTitle') + ' ' + tAdmin('updated'));
+  } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+}
+
+function removeCurrency(id) {
+  showConfirm(tAdmin('confirmDelete'), async function() {
+    try {
+      await api('/currencies/' + id, { method: 'DELETE' });
+      await loadCurrencies();
+      SLF.ui.toast('✅ ' + tAdmin('deleted'));
+    } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+  });
+}
+
+// 挂到 window
+window.loadCurrencies = loadCurrencies;
+window.currencyNameText = currencyNameText;
+window.editCurrency = editCurrency;
+window.closeCurrencyEdit = closeCurrencyEdit;
+window.saveCurrencyEdit = saveCurrencyEdit;
+window.setDefaultCurrency = setDefaultCurrency;
+window.removeCurrency = removeCurrency;
+
+})();
+
+
+/* ========== pages/admin/store.js ========== */
+/*
+ * pages/admin/store.js — 店铺管理模块
+ */
+(function(){
+'use strict';
+
+const ctx = window.SLF.admin;
+if (!ctx) return;
+
+const { $, api, tAdmin, esc, hasPermission, showConfirm } = ctx;
+
+function updateSidebarStore() {
+  const select = document.getElementById('adminStoreSelect');
+  const nameEl = document.getElementById('sidebarStoreName');
+  const codeEl = document.getElementById('sidebarStoreCode');
+  if (!select || !nameEl) return;
+  const opt = select.options[select.selectedIndex];
+  if (opt && opt.value) {
+    nameEl.textContent = opt.text;
+    const storeId = opt.value;
+    if (window._adminStores && window._adminStores.length) {
+      const s = window._adminStores.find(x => String(x.id) === String(storeId));
+      if (s && s.code) codeEl.textContent = s.code;
+      else codeEl.textContent = '';
+    } else {
+      codeEl.textContent = '';
+    }
+  } else {
+    nameEl.textContent = tAdmin('noStoreSelected');
+    codeEl.textContent = '';
+  }
+}
+
+async function loadStores() {
+  try {
+    const rows = await api('/admin/stores');
+    $('#storeList').innerHTML = rows.length ?
+      rows.map(s => `<div class="admin-card">
+      <div class="info"><div class="title">${esc(s.name)}</div><div class="sub">${esc(s.code||'')} ${esc(s.address||'')}</div></div>
+      <div class="actions">
+        <button class="edit-btn" onclick="openStoreEdit(${s.id})">✏️ ${ctx.L('edit')}</button>
+        <button class="copy" onclick="copyStoreMenu(${s.id})">📋 ${tAdmin('copyMainStoreMenu')}</button>
+        <button onclick="openStoreDisplay(${s.id})" style="background:rgba(105,192,255,.15);border-color:rgba(105,192,255,.3);color:#69c0ff;">📺 ${tAdmin('displayPage') || '展示页'}</button>
+        <button onclick="copyStoreDisplayUrl(${s.id})" style="background:rgba(105,192,255,.15);border-color:rgba(105,192,255,.3);color:#69c0ff;">🔗 ${tAdmin('copyDisplayLink') || '复制链接'}</button>
+        ${hasPermission('can_manage_store') ? '<button class="danger" onclick="deleteStore(' + s.id + ')">' + ctx.L('delete') + '</button>' : ''}
+      </div>
+    </div>`).join('') :
+      `<div class="empty-hint">${tAdmin('noData')}</div>`;
+
+    const adminSelect = $('#adminStoreSelect');
+    const waiterSelect = $('#waiterStoreSelect');
+    const editWaiterStore = $('#editWaiterStore');
+    const activeRows = rows.filter(store => Number(store.active) === 1);
+    if (activeRows.length) {
+      const optionsHtml = activeRows.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+      adminSelect.innerHTML = optionsHtml;
+      waiterSelect.innerHTML = optionsHtml;
+      editWaiterStore.innerHTML = optionsHtml;
+      window._adminStores = rows;
+      const savedId = SLF.store.rawGetSession('adminStoreId') || SLF.store.rawGet('storeId') || '';
+      if (activeRows.some(r => String(r.id) === savedId)) {
+        adminSelect.value = savedId;
+      } else {
+        adminSelect.value = rows[0].id;
+      }
+      // ★ 同步两种存储，避免残留旧商户的 storeId
+      SLF.store.rawSetSession('adminStoreId', String(adminSelect.value));
+      SLF.store.rawSet('storeId', String(adminSelect.value));
+      waiterSelect.value = rows[0].id;
+      updateSidebarStore();
+    } else {
+      adminSelect.innerHTML = `<option value="">${tAdmin('noStoreCheckDb')}</option>`;
+      waiterSelect.innerHTML = `<option value="">${tAdmin('noStore')}</option>`;
+      editWaiterStore.innerHTML = `<option value="">${tAdmin('noStore')}</option>`;
+    }
+  } catch (e) {
+    console.error(tAdmin('loadStoreFailed') + ':', e);
+    SLF.ui.toast(`❌ ${tAdmin('loadStoreFailed')}: ` + e.message);
+    $('#storeList').innerHTML = `<div class="empty-hint">${tAdmin('noData')}</div>`;
+    $('#adminStoreSelect').innerHTML = `<option value="">${tAdmin('loadFailedRefresh')}</option>`;
+    $('#waiterStoreSelect').innerHTML = `<option value="">${tAdmin('loadFailed')}</option>`;
+    $('#editWaiterStore').innerHTML = `<option value="">${tAdmin('loadFailed')}</option>`;
+  }
+}
+
+function deleteStore(id) {
+  showConfirm(tAdmin('confirmDelete'), async function() {
+    try {
+      await api('/admin/stores/' + id, { method: 'DELETE' });
+      loadStores();
+      SLF.ui.toast('✅ ' + tAdmin('deleted'));
+    } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+  });
+}
+
+function copyStoreMenu(storeId) {
+  showConfirm(tAdmin('confirmCopyMenu'), async function() {
+    try {
+      const res = await api('/admin/stores/' + storeId + '/copy-menu', { method: 'POST' });
+      SLF.ui.toast('✅ ' + res.message);
+      loadStores();
+      if (document.getElementById('module-menu').classList.contains('active')) window.loadMenus && window.loadMenus();
+    } catch (e) { SLF.ui.toast(`❌ ${tAdmin('copyFailed')}: ` + e.message); }
+  });
+}
+
+async function openStoreEdit(id) {
+  try {
+    const stores = await api('/admin/stores');
+    const target = stores.find(s => String(s.id) === String(id));
+    if (!target) { SLF.ui.toast(`❌ ${tAdmin('storeNotFound')}`); return; }
+    $('#editStoreId').value = target.id;
+    $('#editStoreName').value = target.name;
+    $('#editStoreCode').value = target.code || '';
+    $('#editStoreAddress').value = target.address || '';
+    $('#editStoreActive').checked = !!target.active;
+    const qrLangs = (target.qr_languages || '').split(',').map(s => s.trim()).filter(Boolean);
+    document.querySelectorAll('#qrLangSelector input[type="checkbox"]').forEach(cb => { cb.checked = qrLangs.includes(cb.value); });
+    $('#storeEditTitle').textContent = '🏪 ' + tAdmin('editStore') + ' #' + id;
+    $('#storeEditModal').classList.add('open');
+  } catch (e) { SLF.ui.toast(`❌ ${tAdmin('loadStoreFailed')}: ` + e.message); }
+}
+
+function closeStoreEdit() { $('#storeEditModal').classList.remove('open'); }
+
+document.addEventListener('DOMContentLoaded', function() {
+  const addStoreBtn = document.getElementById('addStoreBtn');
+  if (addStoreBtn) {
+    addStoreBtn.onclick = async function() {
+      const name = $('#storeNameInput').value.trim();
+      const code = $('#storeCodeInput').value.trim();
+      const address = $('#storeAddressInput').value.trim();
+      if (!name) { SLF.ui.toast(`❌ ${tAdmin('enterStoreName')}`); return; }
+      try {
+        await api('/admin/stores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: { name, code, address } });
+        $('#storeNameInput').value = '';
+        $('#storeCodeInput').value = '';
+        $('#storeAddressInput').value = '';
+        loadStores();
+        SLF.ui.toast('✅ ' + tAdmin('added'));
+      } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+    };
+  }
+  const editStoreActive = document.getElementById('editStoreActive');
+  if (editStoreActive) {
+    editStoreActive.addEventListener('change', function() {
+      const statusText = this.checked ? tAdmin('storeActive') : tAdmin('storeDisabled');
+      document.getElementById('storeEditStatusText').textContent = statusText;
+    });
+  }
+  const saveStoreEditBtn = document.getElementById('saveStoreEditBtn');
+  if (saveStoreEditBtn) {
+    saveStoreEditBtn.onclick = async function() {
+      const id = parseInt($('#editStoreId').value);
+      const name = $('#editStoreName').value.trim();
+      const code = $('#editStoreCode').value.trim();
+      const address = $('#editStoreAddress').value.trim();
+      const active = $('#editStoreActive').checked ? 1 : 0;
+      if (!name) { SLF.ui.toast(`❌ ${tAdmin('enterStoreName')}`); return; }
+      try {
+        await api('/admin/stores/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: { name, code, address, active } });
+        closeStoreEdit();
+        loadStores();
+        SLF.ui.toast('✅ ' + tAdmin('updated'));
+      } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+    };
+  }
+});
+
+// 挂到 window
+window.loadStores = loadStores;
+window.updateSidebarStore = updateSidebarStore;
+window.deleteStore = deleteStore;
+window.copyStoreMenu = copyStoreMenu;
+window.openStoreEdit = openStoreEdit;
+window.closeStoreEdit = closeStoreEdit;
+
+})();
+
+window.openStoreDisplay = function(storeId) {
+  window.open(location.origin + '/display?store=' + storeId, '_blank');
+};
+window.copyStoreDisplayUrl = function(storeId) {
+  const url = location.origin + '/display?store=' + storeId;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => SLF.ui.toast('✅ ' + (tAdmin('copied') || '已复制') + '：' + url)).catch(() => prompt('手动复制', url));
+  } else {
+    prompt('手动复制', url);
+  }
+};
+
+
+/* ========== pages/admin/admin-mgr.js ========== */
+/*
+ * pages/admin/admin-mgr.js — 管理员管理（自包含权限渲染）
+ */
+(function(){
+'use strict';
+
+const ctx = window.SLF.admin;
+if (!ctx) return;
+
+const { $, api, tAdmin, esc, hasPermission, showConfirm } = ctx;
+
+/* ========= 权限清单 ========= */
+const ADMIN_PERMISSIONS = [
+  { key: 'can_manage_menu',     labelKey: 'permMenu',        icon: '🍽️', group: 'permGroupOps' },
+  { key: 'can_manage_table',    labelKey: 'permTable',       icon: '🪑', group: 'permGroupOps' },
+  { key: 'can_manage_order',    labelKey: 'permOrder',       icon: '📋', group: 'permGroupOps' },
+  { key: 'can_delete_order',    labelKey: 'permDeleteOrder', icon: '🗑️', group: 'permGroupOps' },
+  { key: 'can_edit_order',      labelKey: 'permEditOrder',   icon: '✏️', group: 'permGroupOps' },
+  { key: 'can_manage_store',    labelKey: 'permStore',       icon: '🏪', group: 'permGroupBase' },
+  { key: 'can_manage_waiter',   labelKey: 'permWaiter',      icon: '👥', group: 'permGroupBase' },
+  { key: 'can_manage_currency', labelKey: 'permCurrency',    icon: '💱', group: 'permGroupBase' },
+  { key: 'can_manage_printer',  labelKey: 'permPrinter',     icon: '🖨️', group: 'permGroupBase' },
+  { key: 'can_manage_cashier',  labelKey: 'permCashier',     icon: '💳', group: 'permGroupBase' },
+  { key: 'can_manage_admin',    labelKey: 'permAdmin',       icon: '👤', group: 'permGroupSystem' },
+  { key: 'can_view_logs',       labelKey: 'permLogs',        icon: '📝', group: 'permGroupSystem' },
+  { key: 'can_manage_financial_reconciliation', labelKey: 'permFinancialReconciliation', icon: '📒', group: 'permGroupSystem' }
+];
+
+function renderPerms(containerId, permissions, disabled) {
+  const container = document.getElementById(containerId);
+  if (!container) { console.warn('[admin-mgr] 容器未找到:', containerId); return; }
+  const groups = {};
+  ADMIN_PERMISSIONS.forEach(p => {
+    if (!groups[p.group]) groups[p.group] = [];
+    groups[p.group].push(p);
+  });
+  let html = '';
+  for (const groupKey of Object.keys(groups)) {
+    html += '<div class="admin-perm-group">' +
+      '<div class="admin-perm-group-title">' + (tAdmin(groupKey) || groupKey) + '</div>' +
+      '<div class="admin-perm-items">';
+    groups[groupKey].forEach(p => {
+      const checked = permissions && permissions[p.key] ? 'checked' : '';
+      const dis = disabled ? 'disabled' : '';
+      html += '<label class="admin-perm-item ' + (disabled ? 'disabled' : '') + '">' +
+        '<span class="admin-perm-icon">' + p.icon + '</span>' +
+        '<span class="admin-perm-label">' + (tAdmin(p.labelKey) || p.key) + '</span>' +
+        '<label class="store-switch">' +
+          '<input type="checkbox" class="admin-perm-checkbox" data-perm="' + p.key + '" ' + checked + ' ' + dis + '>' +
+          '<span class="store-switch-slider"></span>' +
+        '</label>' +
+      '</label>';
+    });
+    html += '</div></div>';
+  }
+  container.innerHTML = html;
+}
+
+function collectPerms(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return {};
+  const perms = {};
+  container.querySelectorAll('input[type="checkbox"][data-perm]').forEach(cb => {
+    perms[cb.dataset.perm] = cb.checked ? 1 : 0;
+  });
+  return perms;
+}
+
+
+function renderStoreAccess(containerId, selectedIds, disabled) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const stores = (window._adminStores || []).filter(store => Number(store.active) === 1);
+  if (!stores.length) {
+    container.innerHTML = '<div class="empty-hint">当前账号没有可分配的启用门店</div>';
+    return;
+  }
+  const selected = new Set((disabled ? stores.map(store => Number(store.id)) : (Array.isArray(selectedIds) ? selectedIds : [])).map(Number));
+  if (!selected.size) {
+    const current = document.getElementById('adminStoreSelect')?.value;
+    if (current) selected.add(Number(current));
+  }
+  container.innerHTML = stores.map(store =>
+    '<label class="admin-perm-item">' +
+      '<span class="admin-perm-label">' + esc(store.name) + '</span>' +
+      '<label class="store-switch"><input type="checkbox" data-store-access="' + Number(store.id) + '" ' +
+        (selected.has(Number(store.id)) ? 'checked ' : '') + (disabled ? 'disabled ' : '') +
+      '><span class="store-switch-slider"></span></label>' +
+    '</label>'
+  ).join('');
+}
+
+function collectStoreAccess(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('input[data-store-access]:checked'))
+    .map(input => Number(input.dataset.storeAccess))
+    .filter(id => Number.isSafeInteger(id) && id > 0);
+}
+
+/* ========= 列表 ========= */
+let adminListCache = [];
+
+async function loadAdmins() {
+  try {
+    const rows = await api('/admin/admins');
+    adminListCache = rows;
+    const currentAdminId = ctx.adminId;
+    $('#adminList').innerHTML = rows.length ?
+      rows.map((a, i) =>
+        '<div class="admin-card">' +
+        '<div class="info">' +
+          '<div class="title">' + esc(a.display_name) + ' · ' + esc(a.username) + (a.id === currentAdminId ? ' ' + tAdmin('currentAdmin') : '') + '</div>' +
+          '<div class="sub">' + (a.active ? '<span style="color:#43e97b">' + tAdmin('adminActive') + '</span>' : '<span style="color:#f5576c">' + tAdmin('adminInactive') + '</span>') + ' · ' + tAdmin('lastLogin') + ' ' + (a.last_login_at ? SLF.utils.formatDateTime(a.last_login_at) : tAdmin('neverLogin')) + '</div>' +
+        '</div>' +
+        '<div class="actions">' +
+          (hasPermission('can_manage_admin') ? '<button class="edit-btn" onclick="editAdminByIndex(' + i + ')">✏️ ' + tAdmin('editAdminBtn') + '</button>' : '') +
+          (hasPermission('can_manage_admin') ? '<button class="danger" onclick="deleteAdminByIndex(' + i + ')"' + (a.id === currentAdminId ? ' disabled style="opacity:.4;cursor:not-allowed;"' : '') + '>' + tAdmin('deleteAdminBtn') + '</button>' : '') +
+        '</div>' +
+      '</div>'
+      ).join('') :
+      '<div class="empty-hint">' + tAdmin('noAdmins') + '</div>';
+  } catch (e) {
+    $('#adminList').innerHTML = '<div class="empty-hint">' + tAdmin('loadFailed') + '</div>';
+  }
+}
+
+/* ========= 编辑 ========= */
+function editAdminByIndex(i) {
+  const a = adminListCache[i];
+  if (!a) return;
+  const perms = {
+    can_manage_menu: a.can_manage_menu,
+    can_manage_table: a.can_manage_table,
+    can_manage_order: a.can_manage_order,
+    can_delete_order: a.can_delete_order,
+    can_edit_order: a.can_edit_order,
+    can_manage_store: a.can_manage_store,
+    can_manage_waiter: a.can_manage_waiter,
+    can_manage_currency: a.can_manage_currency,
+    can_manage_printer: a.can_manage_printer,
+    can_manage_cashier: a.can_manage_cashier,
+    can_manage_admin: a.can_manage_admin,
+    can_view_logs: a.can_view_logs,
+    can_manage_financial_reconciliation: a.can_manage_financial_reconciliation
+  };
+  editAdmin(a.id, a.username, a.display_name, a.active, perms, a.is_primary, a.store_ids);
+}
+
+function editAdmin(id, username, displayName, active, permissions, isPrimary, storeIds) {
+  document.getElementById('editAdminId').value = id;
+  document.getElementById('editAdminUsername').value = username || '';
+  document.getElementById('editAdminDisplayName').value = displayName || '';
+  document.getElementById('editAdminPassword').value = '';
+  document.getElementById('editAdminActive').checked = active ? true : false;
+  renderPerms('editAdminPermissions', permissions || {}, !!isPrimary);
+  renderStoreAccess('editAdminStoreAccess', storeIds, !!isPrimary);
+  document.getElementById('editAdminPermNotice').style.display = isPrimary ? 'block' : 'none';
+  document.getElementById('adminEditModal').classList.add('open');
+}
+
+function closeAdminEdit() { document.getElementById('adminEditModal').classList.remove('open'); }
+
+function saveAdminEdit() {
+  const id = document.getElementById('editAdminId').value;
+  const displayName = document.getElementById('editAdminDisplayName').value.trim();
+  const password = document.getElementById('editAdminPassword').value;
+  const active = document.getElementById('editAdminActive').checked ? 1 : 0;
+  if (!displayName) { SLF.ui.toast('❌ ' + tAdmin('enterDisplayName')); return; }
+  if (password && password.length < 6) { SLF.ui.toast('❌ ' + tAdmin('passwordMin6')); return; }
+  const body = { display_name: displayName, active };
+  if (password) body.password = password;
+  const notice = document.getElementById('editAdminPermNotice');
+  if (!notice || notice.style.display !== 'block') {
+    body.permissions = collectPerms('editAdminPermissions');
+    body.store_ids = collectStoreAccess('editAdminStoreAccess');
+    if (!body.store_ids.length) { SLF.ui.toast('❌ 请至少选择一个可访问门店'); return; }
+  }
+  api('/admin/admins/' + id, { method: 'PUT', body }).then(() => {
+    SLF.ui.toast('✅ ' + tAdmin('adminUpdated'));
+    closeAdminEdit();
+    loadAdmins();
+  }).catch(e => SLF.ui.toast('❌ ' + e.message));
+}
+
+function deleteAdminByIndex(i) {
+  const a = adminListCache[i];
+  if (!a) return;
+  deleteAdmin(a.id, a.username);
+}
+
+function deleteAdmin(id, username) {
+  showConfirm(tAdmin('deleteAdminConfirm').replace('{username}', username), function() {
+    api('/admin/admins/' + id, { method: 'DELETE' }).then(() => {
+      SLF.ui.toast('✅ ' + tAdmin('adminDeleted'));
+      loadAdmins();
+    }).catch(e => SLF.ui.toast('❌ ' + e.message));
+  }, tAdmin('deleteAdminBtn'));
+}
+
+/* ========= 添加 ========= */
+function openAddAdminModal() {
+  if (!hasPermission('can_manage_admin')) { SLF.ui.toast('❌ ' + tAdmin('noPermission')); return; }
+  document.getElementById('addAdminUsername').value = '';
+  document.getElementById('addAdminPassword').value = '';
+  document.getElementById('addAdminDisplayName').value = '';
+  renderPerms('addAdminPermissions', {}, false);
+  renderStoreAccess('addAdminStoreAccess', [], false);
+  document.getElementById('adminAddModal').classList.add('open');
+}
+
+function closeAddAdminModal() { document.getElementById('adminAddModal').classList.remove('open'); }
+
+async function submitAddAdmin() {
+  if (!hasPermission('can_manage_admin')) { SLF.ui.toast('❌ ' + tAdmin('noPermission')); return; }
+  const username = document.getElementById('addAdminUsername').value.trim();
+  const password = document.getElementById('addAdminPassword').value;
+  const display_name = document.getElementById('addAdminDisplayName').value.trim();
+  if (!username || !password || !display_name) { SLF.ui.toast('❌ ' + tAdmin('fillAllFields')); return; }
+  if (password.length < 6) { SLF.ui.toast('❌ ' + tAdmin('passwordMin6')); return; }
+  const permissions = collectPerms('addAdminPermissions');
+  try {
+    const store_ids = collectStoreAccess('addAdminStoreAccess');
+    if (!store_ids.length) { SLF.ui.toast('❌ 请至少选择一个可访问门店'); return; }
+    await api('/admin/admins', { method: 'POST', body: { username, password, display_name, active: 1, permissions, store_ids } });
+    closeAddAdminModal();
+    SLF.ui.toast('✅ ' + tAdmin('adminAdded'));
+    loadAdmins();
+  } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+}
+
+/* ========= 导出 ========= */
+window.loadAdmins = loadAdmins;
+window.editAdminByIndex = editAdminByIndex;
+window.editAdmin = editAdmin;
+window.closeAdminEdit = closeAdminEdit;
+window.saveAdminEdit = saveAdminEdit;
+window.deleteAdminByIndex = deleteAdminByIndex;
+window.deleteAdmin = deleteAdmin;
+window.openAddAdminModal = openAddAdminModal;
+window.closeAddAdminModal = closeAddAdminModal;
+window.submitAddAdmin = submitAddAdmin;
+
+})();
+
+
+/* ========== pages/admin/cashier-mgr.js ========== */
+/*
+ * pages/admin/cashier-mgr.js — 收银员管理（跨店铺聚合列表 + 创建/编辑可选店铺）
+ */
+(function(){
+'use strict';
+
+const ctx = window.SLF.admin;
+if (!ctx) return;
+
+const { $, api, tAdmin, esc, hasPermission, showConfirm, L } = ctx;
+
+function isEnabledFlag(value, fallback = false) {
+  if (value === undefined || value === null) return fallback;
+  return value === true || value === 1 || value === '1' || value === 'true';
+}
+
+let editingCashierId = null;
+let allCashiers = [];
+let allStores = [];
+
+async function ensureStores() {
+  if (allStores.length) return allStores;
+  try {
+    const rows = await api('/admin/stores');
+    allStores = Array.isArray(rows) ? rows : [];
+  } catch (e) {
+    allStores = [];
+  }
+  return allStores;
+}
+
+function getCurrentStoreId() {
+  const v = SLF.store.rawGetSession('adminStoreId') || SLF.store.rawGet('storeId') || '1';
+  return String(v);
+}
+
+function populateStoreSelect(selectedId) {
+  const sel = document.getElementById('cashierStoreSelect');
+  if (!sel) return;
+  sel.innerHTML = allStores.map(s =>
+    '<option value="' + s.id + '">' + esc(s.name) + (s.id == 1 ? ' (' + tAdmin('mainStore') + ')' : '') + '</option>'
+  ).join('');
+  const target = selectedId != null ? String(selectedId) : getCurrentStoreId();
+  if (allStores.some(s => String(s.id) === target)) sel.value = target;
+  sel.disabled = false;
+}
+
+async function openAddCashierModal() {
+  if (!hasPermission('can_manage_cashier')) { SLF.ui.toast('❌ ' + tAdmin('noPermission')); return; }
+  await ensureStores();
+  editingCashierId = null;
+  document.getElementById('cashierModalTitle').textContent = tAdmin('addCashier');
+  document.getElementById('cashierUsername').value = '';
+  document.getElementById('cashierUsername').disabled = false;
+  document.getElementById('cashierName').value = '';
+  document.getElementById('cashierPassword').value = '';
+  document.getElementById('cashierPassword').placeholder = tAdmin('passwordMin6') || '至少6位';
+  document.getElementById('cashierActive').checked = true;
+  document.getElementById('cashierCanSettle').checked = true;
+  document.getElementById('cashierCanCancel').checked = true;
+  document.getElementById('cashierCanRefund').checked = false;
+  document.getElementById('cashierCanViewReport').checked = true;
+  populateStoreSelect(getCurrentStoreId());
+  document.getElementById('cashierModal').classList.add('open');
+}
+
+async function editCashier(cashierId) {
+  await ensureStores();
+  const cashier = allCashiers.find(c => String(c.id) === String(cashierId));
+  if (!cashier) return;
+  editingCashierId = cashier.id;
+  document.getElementById('cashierModalTitle').textContent = tAdmin('editCashier');
+  document.getElementById('cashierUsername').value = cashier.username;
+  document.getElementById('cashierUsername').disabled = true;
+  document.getElementById('cashierName').value = cashier.display_name;
+  document.getElementById('cashierPassword').value = '';
+  document.getElementById('cashierPassword').placeholder = tAdmin('leaveBlankToKeep') || '留空则不修改密码';
+  document.getElementById('cashierActive').checked = isEnabledFlag(cashier.active, false);
+  document.getElementById('cashierCanSettle').checked = isEnabledFlag(cashier.permissions?.can_settle, true);
+  document.getElementById('cashierCanCancel').checked = isEnabledFlag(cashier.permissions?.can_cancel, true);
+  document.getElementById('cashierCanRefund').checked = isEnabledFlag(cashier.permissions?.can_refund, false);
+  document.getElementById('cashierCanViewReport').checked = isEnabledFlag(cashier.permissions?.can_view_report, true);
+  populateStoreSelect(cashier.store_id);
+  document.getElementById('cashierModal').classList.add('open');
+}
+
+function closeCashierModal() {
+  document.getElementById('cashierModal').classList.remove('open');
+  editingCashierId = null;
+}
+
+async function loadCashiers() {
+  try {
+    await ensureStores();
+    const data = await api('/admin/cashiers');
+    const cashiers = Array.isArray(data?.cashiers) ? data.cashiers : [];
+    allCashiers = cashiers;
+    $('#cashierList').innerHTML = cashiers.length ?
+      cashiers.map(c => {
+        const perms = [];
+        if (isEnabledFlag(c.permissions?.can_settle, true)) perms.push(tAdmin('canSettle'));
+        if (isEnabledFlag(c.permissions?.can_cancel, true)) perms.push(tAdmin('canCancel'));
+        if (isEnabledFlag(c.permissions?.can_refund, false)) perms.push(tAdmin('canRefund'));
+        if (isEnabledFlag(c.permissions?.can_view_report, true)) perms.push(tAdmin('canViewReport'));
+        const storeTag = c.store_name
+          ? '<span style="display:inline-block;background:rgba(52,152,219,.15);color:#5dade2;padding:1px 8px;border-radius:8px;font-size:11px;margin-left:6px;">🏪 ' + esc(c.store_name) + '</span>'
+          : '';
+        return '<div class="admin-card">' +
+        '<div class="info">' +
+          '<div class="title">' + esc(c.display_name) + ' · ' + esc(c.username) + storeTag + '</div>' +
+          '<div class="sub">' +
+            (isEnabledFlag(c.active, false)?'<span style="color:#43e97b">' + tAdmin('cashierEnabled') + '</span>':'<span style="color:#f5576c">' + tAdmin('cashierDisabled') + '</span>') +
+            ' · ' + (perms.join(' / ') || tAdmin('noPermission')) +
+          '</div>' +
+        '</div>' +
+        '<div class="actions">' +
+          '<button class="edit-btn" onclick="editCashier(' + c.id + ')">✏️ ' + L('edit') + '</button>' +
+          '<button class="danger" onclick="deleteCashier(' + c.id + ')">' + L('delete') + '</button>' +
+        '</div>' +
+      '</div>';
+      }).join('') :
+      '<div class="empty-hint">' + tAdmin('noCashiers') + '</div>';
+  } catch (e) {
+    $('#cashierList').innerHTML = '<div class="empty-hint">' + tAdmin('loadFailed') + '</div>';
+  }
+}
+
+function deleteCashier(id) {
+  const cashier = allCashiers.find(item => String(item.id) === String(id));
+  const username = cashier ? cashier.username : '';
+  showConfirm(tAdmin('deleteCashierConfirm').replace('{username}', username), function() {
+    api('/admin/cashiers/' + id, { method: 'DELETE' }).then(() => {
+      SLF.ui.toast('✅ ' + tAdmin('cashierDeleted'));
+      loadCashiers();
+    }).catch(e => SLF.ui.toast('❌ ' + e.message));
+  }, tAdmin('deleteCashier'));
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const cashierForm = document.getElementById('cashierForm');
+  if (cashierForm) {
+    cashierForm.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const username = document.getElementById('cashierUsername').value.trim();
+      const display_name = document.getElementById('cashierName').value.trim();
+      const password = document.getElementById('cashierPassword').value;
+      const active = document.getElementById('cashierActive').checked;
+      const store_id = parseInt(document.getElementById('cashierStoreSelect').value, 10) || 1;
+      const permissions = {
+        can_settle: document.getElementById('cashierCanSettle').checked,
+        can_cancel: document.getElementById('cashierCanCancel').checked,
+        can_refund: document.getElementById('cashierCanRefund').checked,
+        can_view_report: document.getElementById('cashierCanViewReport').checked
+      };
+      if (!username || !display_name) { SLF.ui.toast('❌ ' + tAdmin('fillAllFields')); return; }
+      if (!editingCashierId && !password) { SLF.ui.toast('❌ ' + tAdmin('passwordMin6')); return; }
+      if (password && password.length < 6) { SLF.ui.toast('❌ ' + tAdmin('passwordMin6')); return; }
+      try {
+        if (editingCashierId) {
+          const body = { display_name, active, permissions, store_id };
+          if (password) body.password = password;
+          await api('/admin/cashiers/' + editingCashierId, { method: 'PUT', body });
+          SLF.ui.toast('✅ ' + tAdmin('cashierUpdated'));
+        } else {
+          await api('/admin/cashiers', { method: 'POST', body: { username, password, display_name, active, permissions, store_id } });
+          SLF.ui.toast('✅ ' + tAdmin('cashierAdded'));
+        }
+        closeCashierModal();
+        loadCashiers();
+      } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+    });
+  }
+});
+
+window.openAddCashierModal = openAddCashierModal;
+window.editCashier = editCashier;
+window.closeCashierModal = closeCashierModal;
+window.loadCashiers = loadCashiers;
+window.deleteCashier = deleteCashier;
+
+})();
+
