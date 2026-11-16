@@ -64,7 +64,7 @@ Binding details:
 
 - Current event hooks include order creation, admin/cashier settlement, actual KHQR/manual payment confirmation, and successful refunds. A waiter request to confirm KHQR is not treated as a successful payment.
 - Admin Bot credentials remain global rather than merchant-owned. Store-specific Chat IDs and per-event toggles are implemented; they share the global Admin Bot token while preserving exact merchant/store recipient isolation.
-- Delivery is at-least-once. A crash after Telegram accepts a message but before the database acknowledgement may result in a duplicate after lease recovery.
+- The outbox records `sending` before the external API call. Expired `sending` leases and ambiguous Telegram responses move to `uncertain` and are not automatically replayed. Confirmed deliveries retain Telegram's message ID.
 - Failed tasks retry with bounded exponential backoff and eventually enter the dead-letter state. Telegram HTTP 429 responses honor `parameters.retry_after`, capped at one hour. Monitor `telegram_notification_outbox` for `state='dead'`.
 - Webhook update IDs are retained for 30 days; expired and consumed binding challenges are cleaned during new challenge creation. Before restoring a database backup, disable the Telegram worker on every application node and wait for in-flight sends to finish. After restore, customer Telegram bindings/challenges are invalidated because old customer bearer sessions are not restored; customers must scan again and rebind. Pending customer notifications from the restored snapshot are dead-lettered instead of retrying against stale bindings.
 ## Staging acceptance checklist
@@ -78,7 +78,7 @@ Run this only against a disposable staging database and dedicated test Bot accou
 5. Bind a customer private chat, create an order, then rescan to rotate the customer token and complete a new deep-link challenge. Verify the same private chat follows the new session identity, while another store's binding remains untouched.
 6. Trigger settlement, KHQR/manual payment confirmation, and a completed refund. Verify only the intended events arrive and no QR payload, customer bearer token, phone number, or private note appears.
 7. Test both in-page revoke and `/stop`. Confirm queued customer jobs move to `dead` with `binding_revoked`; rebind and verify those old jobs are not sent.
-8. Stop the worker with a pending job, wait for its lease to expire, restart it, and verify recovery. Record that delivery is at-least-once; a send already accepted by Telegram cannot be recalled.
+8. Stop the worker before a job is claimed and verify safe lease recovery. Separately interrupt a job after it enters `sending`; verify it moves to `uncertain` after lease expiry and is not automatically resent. Confirm operators can inspect the row before deciding whether to replay it.
 9. With every worker stopped on every app node, restore a staging backup. Verify customer bindings/challenges are cleared, pending customer jobs are dead-lettered, store/admin configuration is restored, and customers can bind again.
 10. Inspect logs and the outbox summary for redaction. Do not paste Bot tokens or webhook secrets into tickets or chat.
 
