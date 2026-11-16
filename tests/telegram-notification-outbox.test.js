@@ -16,15 +16,14 @@ test('outbox payload stores only the rendered allowlisted message', () => {
   assert.equal(row.merchantId, 9);
   assert.equal(row.storeId, 3);
   assert.deepEqual(JSON.parse(row.payloadJson), {
-    text: `🍽️ <b>FoodFlow · 新订单</b>
+    text: `🏪 <b>门店</b>：Store A · 新订单
 ━━━━━━━━━━━━━━━━━━
-🏪 <b>门店</b>：Store A
-🧾 <b>订单</b>：<code>42</code>
+🧾 <b>订单</b>：42
 📝 <b>顾客备注</b>：
 <blockquote>private</blockquote>
 💰 <b>金额</b>：<b>7.50 USD</b>
 ━━━━━━━━━━━━━━━━━━
-<i>FoodFlow · 智能订单通知</i>`
+智能订单通知`
   });
   assert.equal(row.payloadJson.includes('secret'), false);
   assert.equal(row.payloadJson.includes('private'), true);
