@@ -13,8 +13,7 @@ function formatTelegramBusinessNotification(event) {
   if (!label) throw new TypeError('不支持的 Telegram 业务事件');
   const store = safeField(event.storeName, 80), orderNo = safeField(event.orderNo, 40);
   if (!store || !orderNo) throw new TypeError('业务事件缺少必要标识');
-  const lines = ['🍽️ <b>FoodFlow · ' + label + '</b>', '━━━━━━━━━━━━━━━━━━',
-    '🏪 <b>门店</b>：' + escapeHtml(store), '🧾 <b>订单</b>：<code>' + escapeHtml(orderNo) + '</code>'];
+  const lines = ['🏪 <b>门店</b>：' + escapeHtml(store) + ' · ' + label, '━━━━━━━━━━━━━━━━━━'];
   const tableName = safeField(event.tableName, 50);
   if (tableName) lines.push('🪑 <b>座号</b>：' + escapeHtml(tableName));
   if (event.type === 'order.created') {
@@ -35,7 +34,7 @@ function formatTelegramBusinessNotification(event) {
     if (!/^[A-Z]{3,8}$/.test(currency)) throw new TypeError('业务事件币种无效');
     lines.push('↩️ <b>退款金额</b>：<b>' + amount.toFixed(2) + ' ' + currency + '</b>');
   }
-  lines.push('━━━━━━━━━━━━━━━━━━', '<i>FoodFlow · 智能订单通知</i>');
+  lines.push('━━━━━━━━━━━━━━━━━━', '智能订单通知');
   return lines.join('\n');
 }
 module.exports = { formatTelegramBusinessNotification, escapeHtml };
