@@ -10,12 +10,13 @@ const OUTBOX_SCHEMA_SQL = `
     recipient_scope ENUM('system_admin','merchant_store','customer') NOT NULL,
     recipient_key VARCHAR(96) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     payload_json JSON NOT NULL,
-    state ENUM('pending','processing','delivered','dead') NOT NULL DEFAULT 'pending',
+    state ENUM('pending','processing','sending','delivered','uncertain','dead') NOT NULL DEFAULT 'pending',
     attempts INT UNSIGNED NOT NULL DEFAULT 0,
     available_at DATETIME(3) NOT NULL,
     locked_by CHAR(36) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
     locked_until DATETIME(3) DEFAULT NULL,
     delivered_at DATETIME(3) DEFAULT NULL,
+    telegram_message_id BIGINT UNSIGNED DEFAULT NULL,
     last_error_code VARCHAR(48) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
     created_at DATETIME(3) NOT NULL,
     updated_at DATETIME(3) NOT NULL,
@@ -27,9 +28,19 @@ const OUTBOX_SCHEMA_SQL = `
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 `;
 
-async function ensureTelegramNotificationOutboxSchema({ runAsync }) {
-  if (typeof runAsync !== 'function') throw new TypeError('runAsync is required');
+async function ensureTelegramNotificationOutboxSchema({ runAsync, getAsync }) {
+  if (typeof runAsync !== 'function' || typeof getAsync !== 'function') {
+    throw new TypeError('runAsync and getAsync are required');
+  }
   await runAsync(OUTBOX_SCHEMA_SQL);
+  await runAsync("ALTER TABLE telegram_notification_outbox MODIFY COLUMN state ENUM('pending','processing','sending','delivered','uncertain','dead') NOT NULL DEFAULT 'pending'");
+  const messageIdColumn = await getAsync(
+    'SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?',
+    ['telegram_notification_outbox', 'telegram_message_id']
+  );
+  if (!messageIdColumn) {
+    await runAsync('ALTER TABLE telegram_notification_outbox ADD COLUMN telegram_message_id BIGINT UNSIGNED DEFAULT NULL AFTER delivered_at');
+  }
 }
 
 module.exports = { OUTBOX_SCHEMA_SQL, ensureTelegramNotificationOutboxSchema };
