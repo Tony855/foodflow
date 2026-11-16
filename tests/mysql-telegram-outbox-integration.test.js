@@ -20,7 +20,7 @@ const { runAsync, getAsync, allAsync, withTransaction } = require('../server/db/
 const { ensureTelegramNotificationOutboxSchema } = require('../server/db/migrations/telegram-notification-outbox');
 const { ensureTelegramCustomerBindingSchema } = require('../server/db/migrations/telegram-customer-binding');
 const { ensureTelegramStoreAdminRecipientSchema } = require('../server/db/migrations/telegram-store-admin-recipients');
-const { enqueueTelegramNotification, claimTelegramNotifications, markTelegramNotificationDelivered, releaseTelegramNotificationForRetry, cleanupTelegramNotificationHistory } = require('../server/services/telegram-notification-outbox');
+const { enqueueTelegramNotification, claimTelegramNotifications, markTelegramNotificationSending, markTelegramNotificationUncertain, markTelegramNotificationDelivered, releaseTelegramNotificationForRetry, cleanupTelegramNotificationHistory } = require('../server/services/telegram-notification-outbox');
 const { processTelegramNotificationBatch } = require('../server/services/telegram-notification-worker');
 
 test('MySQL integration: Telegram outbox migration, rollback, idempotency, leases and delivery', {
@@ -45,8 +45,14 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   await runAsync('DROP TABLE IF EXISTS telegram_customer_bindings');
   await runAsync('DROP TABLE IF EXISTS telegram_customer_binding_challenges');
   await runAsync('DROP TABLE IF EXISTS telegram_notification_outbox');
-  await ensureTelegramNotificationOutboxSchema({ runAsync });
-  await ensureTelegramNotificationOutboxSchema({ runAsync });
+  await ensureTelegramNotificationOutboxSchema({ runAsync, getAsync });
+  await ensureTelegramNotificationOutboxSchema({ runAsync, getAsync });
+  // Upgrade a pre-existing outbox table using the old state enum and no message receipt column.
+  await runAsync("ALTER TABLE telegram_notification_outbox MODIFY COLUMN state ENUM('pending','processing','delivered','dead') NOT NULL DEFAULT 'pending'");
+  await runAsync('ALTER TABLE telegram_notification_outbox DROP COLUMN telegram_message_id');
+  await ensureTelegramNotificationOutboxSchema({ runAsync, getAsync });
+  const upgradedMessageIdColumn = await getAsync('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?', ['telegram_notification_outbox', 'telegram_message_id']);
+  assert.ok(upgradedMessageIdColumn, 'migration must add the Telegram message receipt column');
   await ensureTelegramCustomerBindingSchema({ runAsync });
   await ensureTelegramCustomerBindingSchema({ runAsync });
   await ensureTelegramStoreAdminRecipientSchema({ runAsync });
@@ -130,8 +136,10 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   assert.equal(claimedA.length, 1);
   assert.equal(claimedA[0].id, first.id);
   assert.equal((await claimTelegramNotifications({ workerId: workerB, limit: 1, leaseSeconds: 30 })).length, 0);
-  assert.equal(await markTelegramNotificationDelivered(first.id, workerB), false);
-  assert.equal(await markTelegramNotificationDelivered(first.id, workerA), true);
+  assert.equal(await markTelegramNotificationSending(first.id, workerB), false);
+  assert.equal(await markTelegramNotificationSending(first.id, workerA), true);
+  assert.equal(await markTelegramNotificationDelivered(first.id, workerA, 12345), true);
+  assert.equal(Number((await getAsync('SELECT telegram_message_id FROM telegram_notification_outbox WHERE id=?', [first.id])).telegram_message_id), 12345);
   assert.equal(await markTelegramNotificationDelivered(first.id, workerA), false);
 
   // Exercise two independent worker transactions concurrently: SKIP LOCKED
@@ -156,6 +164,7 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   assert.equal(leaseB.length, 1);
   assert.equal(leaseB[0].id, leaseA[0].id);
   assert.equal(await markTelegramNotificationDelivered(leaseA[0].id, workerA), false);
+  assert.equal(await markTelegramNotificationSending(leaseB[0].id, workerB), true);
   assert.equal(await markTelegramNotificationDelivered(leaseB[0].id, workerB), true);
 
   const retryKey = `${key}:retry`;
@@ -186,11 +195,24 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   const result = await processTelegramNotificationBatch({
     workerId: workerB, limit: 1,
     resolveRecipient: async () => ({ scope: 'system_admin', merchantId: null, storeId: null, token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', chatId: '-100123' }),
-    sendMessage: async ({ text }) => { assert.match(text, /IT-42/); }
+    sendMessage: async ({ text }) => { assert.match(text, /IT-42/); return { messageId: 67890 }; }
   });
   assert.equal(result.length, 1);
   assert.equal(result[0].state, 'delivered');
+  assert.equal(Number((await getAsync('SELECT telegram_message_id FROM telegram_notification_outbox WHERE event_key=?', [workerKey])).telegram_message_id), 67890);
 
+  const uncertainKey = `${key}:uncertain-send`;
+  await enqueueTelegramNotification({ ...input, eventKey: uncertainKey });
+  const uncertainResult = await processTelegramNotificationBatch({
+    workerId: workerA, limit: 1,
+    resolveRecipient: async () => ({ scope: 'system_admin', merchantId: null, storeId: null, token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', chatId: '-100123' }),
+    sendMessage: async () => { throw Object.assign(new Error('network timeout'), { deliveryUncertain: true }); }
+  });
+  assert.equal(uncertainResult[0].state, 'uncertain');
+  const uncertainRow = await getAsync('SELECT state,last_error_code FROM telegram_notification_outbox WHERE event_key=?', [uncertainKey]);
+  assert.equal(uncertainRow.state, 'uncertain');
+  assert.equal(uncertainRow.last_error_code, 'delivery_uncertain');
+  assert.equal((await claimTelegramNotifications({ workerId: workerB, limit: 1, leaseSeconds: 30 })).some(row => row.event_key === uncertainKey), false);
 
   const suppressedKey = `${key}:event-disabled`;
   await enqueueTelegramNotification({
@@ -337,12 +359,18 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   const oldDeliveredKey = `${key}:old-delivered`;
   const oldDeadKey = `${key}:old-dead`;
   const exhaustedLeaseKey = `${key}:exhausted-lease`;
+  const expiredSendingKey = `${key}:expired-sending`;
   const oldPayload = JSON.stringify({ text: 'old notification' });
   await runAsync("INSERT INTO telegram_notification_outbox (event_key,event_type,recipient_scope,recipient_key,payload_json,state,attempts,available_at,locked_by,locked_until,created_at,updated_at) VALUES (?, 'order.created','system_admin','admin:primary',?,'processing',8,UTC_TIMESTAMP(3),?,DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND),UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))", [exhaustedLeaseKey, oldPayload, crypto.randomUUID()]);
   await runAsync("INSERT INTO telegram_notification_outbox (event_key,event_type,recipient_scope,recipient_key,payload_json,state,attempts,available_at,delivered_at,created_at,updated_at) VALUES (?, 'order.created','system_admin','admin:primary',?,'delivered',1,DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 100 DAY),DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 100 DAY),DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 100 DAY),DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 100 DAY))", [oldDeliveredKey, oldPayload]);
+  await runAsync("INSERT INTO telegram_notification_outbox (event_key,event_type,recipient_scope,recipient_key,payload_json,state,attempts,available_at,locked_by,locked_until,created_at,updated_at) VALUES (?, 'order.created','system_admin','admin:primary',?,'sending',1,UTC_TIMESTAMP(3),?,DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND),UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))", [expiredSendingKey, oldPayload, crypto.randomUUID()]);
   await runAsync("INSERT INTO telegram_notification_outbox (event_key,event_type,recipient_scope,recipient_key,payload_json,state,attempts,available_at,created_at,updated_at) VALUES (?, 'order.created','system_admin','admin:primary',?,'dead',8,DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 200 DAY),DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 200 DAY),DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 200 DAY))", [oldDeadKey, oldPayload]);
   const cleanup = await cleanupTelegramNotificationHistory();
+  assert.equal(cleanup.expiredSending, 1);
   assert.equal(cleanup.exhaustedDead, 1);
+  const expiredSending = await getAsync('SELECT state,last_error_code FROM telegram_notification_outbox WHERE event_key=?', [expiredSendingKey]);
+  assert.equal(expiredSending.state, 'uncertain');
+  assert.equal(expiredSending.last_error_code, 'delivery_uncertain');
   assert.equal(cleanup.deliveredDeleted, 1);
   assert.equal(cleanup.deadDeleted, 1);
   assert.equal((await getAsync('SELECT state,last_error_code FROM telegram_notification_outbox WHERE event_key=?', [exhaustedLeaseKey])).state, 'dead');

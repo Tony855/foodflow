@@ -28,12 +28,18 @@ async function sendTelegramMessage({ token, chatId, text, fetchImpl = globalThis
       signal: AbortSignal.timeout(10000)
     });
   } catch (_) {
-    throw new Error('无法连接 Telegram API，请检查服务器网络或稍后重试');
+    const error = new Error('无法连接 Telegram API，请检查服务器网络或稍后重试');
+    error.deliveryUncertain = true;
+    throw error;
   }
 
   let payload;
   try { payload = await response.json(); }
-  catch (_) { throw new Error('Telegram API 返回了无法识别的响应'); }
+  catch (_) {
+    const error = new Error('Telegram API 返回了无法识别的响应');
+    error.deliveryUncertain = true;
+    throw error;
+  }
 
   if (!response.ok || payload?.ok !== true) {
     const code = Number(payload?.error_code || response.status);
@@ -41,6 +47,9 @@ async function sendTelegramMessage({ token, chatId, text, fetchImpl = globalThis
     if (code === 403) throw new Error('Bot 无权向该 Chat ID 发送消息，请先启动 Bot 或检查群组权限');
     if (code === 400) throw new Error('Chat ID 无效，或 Bot 尚未加入目标群组');
     const error = new Error('Telegram 消息发送失败（HTTP ' + code + '）');
+    // A server-side failure can occur after Telegram accepted the message.
+    // Treat it as ambiguous rather than retrying and risking a duplicate.
+    if (code >= 500) error.deliveryUncertain = true;
     // Telegram supplies parameters.retry_after for flood-control responses.
     // Keep only a bounded integer; never retain or expose the raw API payload.
     const retryAfter = payload?.parameters?.retry_after;
