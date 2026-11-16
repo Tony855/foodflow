@@ -22,7 +22,7 @@ app.post('/api/public/call-waiter', async (req, res) => {
   try {
     const table = typeof req.body?.table === 'string' ? req.body.table.trim() : '';
     const sessionToken = typeof req.body?.sessionToken === 'string' ? req.body.sessionToken.trim() : '';
-    if (!table || table.length > 50) return res.status(400).json({ error: '桌号无效' });
+    if (!table || table.length > 50) return res.status(400).json({ error: '座号无效' });
     if (!sessionToken) return res.status(401).json({ error: '请先扫描桌台二维码' });
     if (sessionToken.length > 256) return res.status(400).json({ error: '扫码会话令牌无效' });
 
@@ -43,7 +43,7 @@ app.post('/api/public/call-waiter', async (req, res) => {
       return res.status(410).json({ error: '二维码已过期，请重新扫码' });
     }
     if (initialSession.table_name !== table) {
-      return res.status(403).json({ error: '扫码桌号与请求桌号不一致' });
+      return res.status(403).json({ error: '扫码座号与请求座号不一致' });
     }
 
     const limitRows = await allAsync(
@@ -65,7 +65,7 @@ app.post('/api/public/call-waiter', async (req, res) => {
         'SELECT id, store_id FROM tables WHERE name=? AND store_id=? FOR UPDATE',
         [table, initialSession.store_id]
       );
-      if (!tableRow) throw Object.assign(new Error('桌号不存在'), { status: 404 });
+      if (!tableRow) throw Object.assign(new Error('座号不存在'), { status: 404 });
       const activeStore = await getAsync(
         'SELECT s.id FROM stores s JOIN merchants m ON m.id=s.merchant_id WHERE s.id=? AND s.active=1 AND m.status=1',
         [tableRow.store_id]
@@ -81,7 +81,7 @@ app.post('/api/public/call-waiter', async (req, res) => {
         throw Object.assign(new Error('二维码已过期，请重新扫码'), { status: 410 });
       }
       if (session.table_name !== table || Number(session.store_id) !== Number(tableRow.store_id)) {
-        throw Object.assign(new Error('扫码桌号与请求桌号不一致'), { status: 403 });
+        throw Object.assign(new Error('扫码座号与请求座号不一致'), { status: 403 });
       }
 
       if (limitEnabled) {
