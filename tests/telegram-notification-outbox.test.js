@@ -11,13 +11,14 @@ test('outbox payload stores only the rendered allowlisted message', () => {
   const row = normalizeOutboxInput({
     eventKey: 'order:store-3:42:created', recipientScope: 'merchant_store',
     recipientKey: 'store:3', merchantId: 9, storeId: 3,
-    event: { type: 'order.created', storeName: 'Store A', orderNo: '42', amount: 7.5, currency: 'USD', customerToken: 'secret', note: 'private' }
+    event: { type: 'order.created', storeName: 'Store A', orderNo: '42', tableName: 'A-08', amount: 7.5, currency: 'USD', customerToken: 'secret', note: 'private' }
   });
   assert.equal(row.merchantId, 9);
   assert.equal(row.storeId, 3);
   assert.deepEqual(JSON.parse(row.payloadJson), {
     text: `🏪 <b>门店</b>：Store A · 新订单
 ━━━━━━━━━━━━━━━━━━
+🪑 <b>座号</b>：A-08
 🧾 <b>订单</b>：42
 📝 <b>顾客备注</b>：
 <blockquote>private</blockquote>
