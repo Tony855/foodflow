@@ -155,6 +155,9 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   assert.notEqual(otherType.id, first.id);
   const sameScopeDuplicate = await enqueueTelegramNotification(input);
   assert.equal(sameScopeDuplicate.id, first.id);
+  // Keep the following lease/concurrency assertions isolated from these
+  // additional dedupe fixtures.
+  await runAsync("UPDATE telegram_notification_outbox SET state='dead', last_error_code='event_disabled', updated_at=UTC_TIMESTAMP(3) WHERE id IN (?, ?)", [otherStore.id, otherType.id]);
   const stored = await getAsync('SELECT payload_json,state,attempts FROM telegram_notification_outbox WHERE id=?', [first.id]);
   assert.equal(String(stored.payload_json).includes('must-not-persist'), false);
 
