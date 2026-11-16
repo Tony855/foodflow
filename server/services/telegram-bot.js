@@ -44,7 +44,7 @@ async function sendTelegramMessage({ token, chatId, text, fetchImpl = globalThis
     // Telegram supplies parameters.retry_after for flood-control responses.
     // Keep only a bounded integer; never retain or expose the raw API payload.
     const retryAfter = payload?.parameters?.retry_after;
-    if (code === 429 && Number.isSafeInteger(retryAfter) && retryAfter > 0) {
+    if (code >= 500) error.deliveryUncertain = true;\n    if (code === 429 && Number.isSafeInteger(retryAfter) && retryAfter > 0) {
       error.retryAfterSeconds = Math.min(retryAfter, 3600);
     }
     throw error;
