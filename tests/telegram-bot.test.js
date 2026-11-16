@@ -29,7 +29,8 @@ test('sends a fixed test message to Telegram without exposing the token in error
   assert.equal(request.options.method, 'POST');
   assert.deepEqual(JSON.parse(request.options.body), {
     chat_id: '-100123',
-    text: 'FoodFlow Telegram Bot 连接测试成功。'
+    text: 'FoodFlow Telegram Bot 连接测试成功。',
+    parse_mode: 'HTML'
   });
   assert.deepEqual(result, { messageId: 17, chatId: '-100123' });
 });

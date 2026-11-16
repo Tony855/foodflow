@@ -15,9 +15,19 @@ test('outbox payload stores only the rendered allowlisted message', () => {
   });
   assert.equal(row.merchantId, 9);
   assert.equal(row.storeId, 3);
-  assert.deepEqual(JSON.parse(row.payloadJson), { text: '[FoodFlow] 新订单\n门店：Store A\n订单：42\n金额：7.50 USD' });
+  assert.deepEqual(JSON.parse(row.payloadJson), {
+    text: `🍽️ <b>FoodFlow · 新订单</b>
+━━━━━━━━━━━━━━━━━━
+🏪 <b>门店</b>：Store A
+🧾 <b>订单</b>：<code>42</code>
+📝 <b>顾客备注</b>：
+<blockquote>private</blockquote>
+💰 <b>金额</b>：<b>7.50 USD</b>
+━━━━━━━━━━━━━━━━━━
+<i>FoodFlow · 智能订单通知</i>`
+  });
   assert.equal(row.payloadJson.includes('secret'), false);
-  assert.equal(row.payloadJson.includes('private'), false);
+  assert.equal(row.payloadJson.includes('private'), true);
 });
 
 test('outbox rejects malformed idempotency keys and tenantless non-admin recipients', () => {

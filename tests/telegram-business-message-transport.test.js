@@ -17,7 +17,7 @@ test('sends bounded business text as plain Telegram text', async () => {
   });
   assert.equal(request.url, 'https://api.telegram.org/bot' + token + '/sendMessage');
   assert.deepEqual(JSON.parse(request.options.body), {
-    chat_id: '-100123', text: '[FoodFlow] 新订单\n订单：11001'
+    chat_id: '-100123', text: '[FoodFlow] 新订单\n订单：11001', parse_mode: 'HTML'
   });
   assert.deepEqual(result, { messageId: 31, chatId: '-100123' });
 });

@@ -577,7 +577,7 @@ app.post('/api/orders', async (req, res) => {
         await enqueueSystemAdminTelegramNotification({
           getAsync,
           eventKey: `order:${result.lastID}:created`,
-          event: { type: 'order.created', storeName: store?.name || `Store ${finalStoreId}`, orderNo, amount: calculatedTotal, currency: 'USD' }
+          event: { type: 'order.created', storeName: store?.name || `Store ${finalStoreId}`, orderNo, amount: calculatedTotal, currency: 'USD', note }
         });
         await enqueueCustomerTelegramNotification({
           allAsync,
@@ -585,14 +585,14 @@ app.post('/api/orders', async (req, res) => {
           merchantId: store?.merchant_id,
           storeId: finalStoreId,
           eventKey: `order:${result.lastID}:created:customer`,
-          event: { type: 'order.created', storeName: store?.name || `Store ${finalStoreId}`, orderNo, amount: calculatedTotal, currency: 'USD' }
+          event: { type: 'order.created', storeName: store?.name || `Store ${finalStoreId}`, orderNo, amount: calculatedTotal, currency: 'USD', note }
         });
         await enqueueStoreAdminTelegramNotification({
           allAsync,
           merchantId: store?.merchant_id,
           storeId: finalStoreId,
           eventKey: `order:${result.lastID}:created:store`,
-          event: { type: 'order.created', storeName: store?.name || `Store ${finalStoreId}`, orderNo, amount: calculatedTotal, currency: 'USD' }
+          event: { type: 'order.created', storeName: store?.name || `Store ${finalStoreId}`, orderNo, amount: calculatedTotal, currency: 'USD', note }
         });
         return { orderId: result.lastID, orderNo };
       });

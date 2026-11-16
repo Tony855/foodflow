@@ -24,7 +24,7 @@ async function sendTelegramMessage({ token, chatId, text, fetchImpl = globalThis
     response = await fetchImpl(`${TELEGRAM_API}/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text }),
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
       signal: AbortSignal.timeout(10000)
     });
   } catch (_) {
