@@ -15,7 +15,7 @@ test('formats allowlisted order events with bounded fields only', () => {
 ━━━━━━━━━━━━━━━━━━
 🏪 <b>门店</b>：Phnom Penh
 🧾 <b>订单</b>：<code>11001</code>
-🪑 <b>桌号</b>：A-08
+🪑 <b>座号</b>：A-08
 📝 <b>顾客备注</b>：
 <blockquote>不要香菜、少辣</blockquote>
 💰 <b>金额</b>：<b>12.50 USD</b>
@@ -36,7 +36,7 @@ test('formats refund amount without exposing reason or notes', () => {
     type: 'order.refunded', storeName: 'Store B', orderNo: '11003', tableName: 'VIP-2',
     refundAmount: 4.25, currency: 'USD', reason: 'private reason', note: 'private note'
   });
-  assert.match(message, /<b>桌号<\/b>：VIP-2/);
+  assert.match(message, /<b>座号<\/b>：VIP-2/);
   assert.match(message, /<b>退款金额<\/b>：<b>4\.25 USD<\/b>/);
   assert.equal(message.includes('private'), false);
 });
@@ -75,9 +75,9 @@ test('escapes table names and omits table line when unavailable', () => {
   const withTable = formatTelegramBusinessNotification({
     type: 'order.created', storeName: 'A', orderNo: '1', tableName: '<VIP & 2>', amount: 1, currency: 'USD'
   });
-  assert.ok(withTable.includes('<b>桌号</b>：&lt;VIP &amp; 2&gt;'));
+  assert.ok(withTable.includes('<b>座号</b>：&lt;VIP &amp; 2&gt;'));
   const withoutTable = formatTelegramBusinessNotification({
     type: 'order.created', storeName: 'A', orderNo: '2', amount: 1, currency: 'USD'
   });
-  assert.equal(withoutTable.includes('桌号'), false);
+  assert.equal(withoutTable.includes('座号'), false);
 });
