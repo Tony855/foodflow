@@ -2993,3 +2993,1246 @@ window.doAdvancedExport = doAdvancedExport;
   window.loadFinancialReconciliation = loadFinancialReconciliation;
 })();
 
+
+/* ========== pages/admin/menu.js ========== */
+/*
+ * pages/admin/menu.js — 菜品+分类管理模块
+ */
+(function(){
+'use strict';
+
+const ctx = window.SLF.admin;
+if (!ctx) return;
+
+const { $, api, tAdmin, esc, hasPermission, L, dualCurrencyEnabled, secondaryCurrencyCode } = ctx;
+
+const categoryText = c => {
+  const cat = (SLF.i18n.dicts[SLF.i18n.lang] && SLF.i18n.dicts[SLF.i18n.lang].categories) || {};
+  return cat[c] || c;
+};
+
+async function loadMenus() {
+  const list = await api('/admin/menu');
+  ctx.setMenus(list);
+  const categoryFilter = $('#menuCategoryFilter') ? $('#menuCategoryFilter').value : 'all';
+  let filtered = categoryFilter === 'all' ? list : list.filter(m => m.category === categoryFilter);
+  const sortBy = $('#menuSortBy') ? $('#menuSortBy').value : 'default';
+  if (sortBy === 'name_asc') filtered = [...filtered].sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+  else if (sortBy === 'name_desc') filtered = [...filtered].sort((a, b) => b.name.localeCompare(a.name, 'zh'));
+  else if (sortBy === 'price_asc') filtered = [...filtered].sort((a, b) => Number(a.price) - Number(b.price));
+  else if (sortBy === 'price_desc') filtered = [...filtered].sort((a, b) => Number(b.price) - Number(a.price));
+  $('#menus').innerHTML = filtered.length ?
+    `<div class="menu-list">${filtered.map(m => {
+      let priceDisplay = SLF.money.primary(SLF.money.toBase(m.price, (m.currency_code||'USD')));
+      // 副币统一由店铺级设置决定，不再读菜品级字段
+      const _base = SLF.money.toBase(m.price, m.currency_code || 'USD');
+      const _sec = SLF.money.secondaryCurrency;
+      if (_sec && _sec.code) {
+        const sec = SLF.money.secondary(_base, _sec.code);
+        if (sec) priceDisplay += ` (${sec})`;
+      }
+      return `<div class="menu-item-admin ${m.active ? '' : 'inactive'}">
+        <div class="menu-thumb">${m.image ? `<img src="/uploads/${esc(m.image)}">` : esc(m.emoji || '🍽️')}</div>
+        <div class="menu-info">
+          <div class="name-row"><span class="name">${esc(m.name)}</span><span class="price">${priceDisplay}</span></div>
+          <div class="meta">${esc(categoryText(m.category))}${m.desc ? ` · ${esc(m.desc)}` : ''}</div>
+        </div>
+        <div class="menu-actions">
+          ${hasPermission('can_manage_menu') ? '<button onclick="toggleMenuStatus(' + m.id + ',' + (m.active?0:1) + ')">' + (m.active ? tAdmin('unlistDish') : tAdmin('listDish')) + '</button>' : ''}
+          ${hasPermission('can_manage_menu') ? '<button class="edit-btn" onclick="editMenu(' + m.id + ')">✏️ ' + L('edit') + '</button>' : ''}
+          ${hasPermission('can_manage_menu') ? '<button class="danger" onclick="removeMenu(' + m.id + ')">' + L('delete') + '</button>' : ''}
+        </div>
+      </div>`;
+    }).join('')}</div>` :
+    `<div class="empty-hint">${tAdmin('noDishes')}</div>`;
+}
+
+async function loadMenuCategories() {
+  const list = await api('/menu-categories');
+  ctx.setCategories(list);
+  populateMenuCategorySelect();
+  renderCategoryList();
+}
+
+function populateMenuCategorySelect() {
+  const cats = ctx.categoriesCache();
+  const select = $('#menuCategory');
+  select.innerHTML = cats.map(c => `<option value="${esc(c.name)}">${esc(categoryText(c.name))}</option>`).join('');
+  const filterSelect = $('#menuCategoryFilter');
+  if (filterSelect) {
+    const currentValue = filterSelect.value;
+    filterSelect.innerHTML = '<option value="all">' + tAdmin('menuAllCategoriesOption') + '</option>' +
+      cats.map(c => `<option value="${esc(c.name)}">${esc(categoryText(c.name))}</option>`).join('');
+    filterSelect.value = currentValue || 'all';
+  }
+}
+
+function renderCategoryList() {
+  const cats = ctx.categoriesCache();
+  const box = $('#categoryList');
+  box.innerHTML = cats.length ?
+    cats.map(c => `<div class="category-row" draggable="true" data-id="${c.id}">
+      <span class="name">${esc(categoryText(c.name))}</span>
+      <div class="actions"><button class="edit-category-btn" data-category-id="${Number(c.id)}" data-category-name="${esc(c.name)}">${L('edit')}</button><button class="danger" onclick="deleteCategory(${c.id})">${L('delete')}</button></div>
+    </div>`).join('') :
+    `<div class="empty-hint">${tAdmin('noData')}</div>`;
+  box.querySelectorAll('.edit-category-btn').forEach(button => {
+    button.addEventListener('click', function() {
+      const categoryId = Number(this.dataset.categoryId);
+      if (!Number.isSafeInteger(categoryId) || categoryId <= 0) return;
+      editCategory(categoryId, this.dataset.categoryName || '');
+    });
+  });
+}
+
+let editingMenuId = null;
+let editingCategoryId = null;
+
+function openCategoryModal() { $('#categoryModal').classList.add('open'); loadMenuCategories(); }
+function closeCategoryModal() { $('#categoryModal').classList.remove('open'); }
+
+async function addCategory() {
+  const name = $('#newCategoryName').value.trim();
+  if (!name) { SLF.ui.toast('❌ ' + tAdmin('tableNameRequired')); return; }
+  try {
+    await api('/menu-categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: { name } });
+    $('#newCategoryName').value = '';
+    await loadMenuCategories();
+    SLF.ui.toast('✅ ' + tAdmin('added'));
+  } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+}
+
+function editCategory(id, oldName) {
+  editingCategoryId = id;
+  $('#editCategoryName').value = oldName;
+  $('#categoryEditModalTitle').textContent = tAdmin('editCategory');
+  $('#categoryEditModal').classList.add('open');
+  setTimeout(() => $('#editCategoryName').focus(), 100);
+}
+function closeCategoryEditModal() { $('#categoryEditModal').classList.remove('open'); editingCategoryId = null; }
+
+async function saveCategoryEdit() {
+  const name = $('#editCategoryName').value.trim();
+  if (!name) { SLF.ui.toast(`⚠️ ${tAdmin('nameRequired')}`); return; }
+  try {
+    await api('/menu-categories/' + editingCategoryId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: { name } });
+    closeCategoryEditModal();
+    await loadMenuCategories();
+    await loadMenus();
+    SLF.ui.toast('✅ ' + tAdmin('updated'));
+  } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+}
+
+function deleteCategory(id) {
+  ctx.showConfirm(tAdmin('confirmDelete'), async function() {
+    try {
+      await api('/menu-categories/' + id, { method: 'DELETE' });
+      await loadMenuCategories();
+      await loadMenus();
+      SLF.ui.toast('✅ ' + tAdmin('deleted'));
+    } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+  });
+}
+
+function openDishModal() {
+  editingMenuId = null;
+  $('#menuForm').reset();
+  $('#menuEmoji').value = '🍖';
+  $('#dishModalTitle').textContent = tAdmin('addDish');
+  $('#menuSaveButton').textContent = tAdmin('addDish');
+  $('#menuCancelButton').hidden = true;
+  populateMenuCategorySelect();
+  const currencies = ctx.currenciesCache();
+  if (currencies.length) {
+    const defaultCode = currencies.find(c => c.is_default)?.code || currencies[0].code;
+    $('#menuCurrency').value = defaultCode;
+  }
+  $('#dishModal').classList.add('open');
+}
+
+function closeDishModal() { $('#dishModal').classList.remove('open'); cancelMenuEdit(); }
+
+function editMenu(id) {
+  const menus = ctx.menusCache();
+  const current = menus.find(x => String(x.id) === String(id));
+  if (!current) return;
+  editingMenuId = id;
+  populateMenuCategorySelect();
+  $('#menuName').value = current.name;
+  $('#menuNameEn').value = current.name_en || '';
+  $('#menuPrice').value = current.price;
+  $('#menuCategory').value = current.category;
+  $('#menuCurrency').value = current.currency_code || 'USD';
+  $('#menuUnit').value = current.unit || tAdmin('portion');
+  $('#menuEmoji').value = current.emoji || '';
+  $('#menuDesc').value = current.desc || '';
+  $('#menuDescEn').value = current.desc_en || '';
+  $('#menuImageFile').value = '';
+  const _vf = $('#menuVideoFile'); if (_vf) _vf.value = '';
+  $('#dishModalTitle').textContent = tAdmin('menuManage') + ' #' + id;
+  $('#menuSaveButton').textContent = L('save');
+  $('#menuCancelButton').hidden = false;
+  $('#dishModal').classList.add('open');
+}
+
+function cancelMenuEdit() {
+  editingMenuId = null;
+  $('#menuForm').reset();
+  $('#menuEmoji').value = '🍖';
+  $('#dishModalTitle').textContent = tAdmin('addDish');
+  $('#menuSaveButton').textContent = tAdmin('addDish');
+  $('#menuCancelButton').hidden = true;
+  const currencies = ctx.currenciesCache();
+  if (currencies.length) {
+    const defaultCode = currencies.find(c => c.is_default)?.code || currencies[0].code;
+    $('#menuCurrency').value = defaultCode;
+  }
+}
+
+function removeMenu(id) {
+  ctx.showConfirm(tAdmin('confirmDelete'), async function() {
+    try {
+      await api('/menu/' + id, { method: 'DELETE' });
+      await loadMenus();
+      SLF.ui.toast('✅ ' + tAdmin('deleted'));
+    } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+  });
+}
+
+async function toggleMenuStatus(id, active) {
+  try {
+    await api('/menu/' + id + '/status', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: { active } });
+    await loadMenus();
+    SLF.ui.toast('✅ ' + (active ? tAdmin('listed') : tAdmin('unlisted')));
+  } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const menuForm = document.getElementById('menuForm');
+  if (menuForm) {
+    menuForm.onsubmit = async function(e) {
+      e.preventDefault();
+      try {
+        const isEditing = Boolean(editingMenuId);
+        const form = new FormData();
+        [
+          ['name', 'menuName'], ['name_en', 'menuNameEn'], ['price', 'menuPrice'],
+          ['category', 'menuCategory'], ['currency_code', 'menuCurrency'],
+          ['emoji', 'menuEmoji'], ['desc', 'menuDesc'], ['desc_en', 'menuDescEn'],
+          ['unit', 'menuUnit']
+        ].forEach(([k, id]) => {
+          const el = $('#' + id);
+          form.append(k, el.type === 'checkbox' ? (el.checked ? '1' : '0') : el.value);
+        });
+        const file = $('#menuImageFile').files[0];
+        const videoFile = $('#menuVideoFile') && $('#menuVideoFile').files[0];
+        if (videoFile) form.append('video', videoFile);
+        if (file) {
+          try {
+            const dataUrl = await new Promise((res, rej) => {
+              const fr = new FileReader();
+              fr.onload = () => res(fr.result);
+              fr.onerror = rej;
+              fr.readAsDataURL(file);
+            });
+            const img = await new Promise((res, rej) => {
+              const im = new Image();
+              im.onload = () => res(im);
+              im.onerror = rej;
+              im.src = dataUrl;
+            });
+            const canvas = document.createElement('canvas');
+            const maxW = 800, maxH = 800;
+            let w = img.width, h = img.height;
+            if (w > maxW) { h = h * maxW / w; w = maxW; }
+            if (h > maxH) { w = w * maxH / h; h = maxH; }
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+            form.set('image', blob, 'menu_' + Date.now() + '.jpg');
+          } catch (imgErr) { console.warn('图片压缩失败:', imgErr); }
+        }
+        if (isEditing) {
+          await SLF.api.put('/menu/' + editingMenuId, form);
+        } else {
+          await SLF.api.post('/menu', form);
+        }
+        closeDishModal();
+        await loadMenus();
+        SLF.ui.toast('✅ ' + tAdmin('saved'));
+      } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+    };
+  }
+});
+
+// 挂到 window
+window.loadMenus = loadMenus;
+window.loadMenuCategories = loadMenuCategories;
+window.categoryText = categoryText;
+window.populateMenuCategorySelect = populateMenuCategorySelect;
+window.renderCategoryList = renderCategoryList;
+window.openCategoryModal = openCategoryModal;
+window.closeCategoryModal = closeCategoryModal;
+window.addCategory = addCategory;
+window.editCategory = editCategory;
+window.closeCategoryEditModal = closeCategoryEditModal;
+window.saveCategoryEdit = saveCategoryEdit;
+window.deleteCategory = deleteCategory;
+window.openDishModal = openDishModal;
+window.closeDishModal = closeDishModal;
+window.editMenu = editMenu;
+window.cancelMenuEdit = cancelMenuEdit;
+window.removeMenu = removeMenu;
+window.toggleMenuStatus = toggleMenuStatus;
+
+})();
+
+// ===== 批量导入 =====
+let importItems = [];
+
+function openImportModal() {
+  document.getElementById('importModal').classList.add('open');
+  document.getElementById('importFile').value = '';
+  document.getElementById('importPreview').innerHTML = '';
+  document.getElementById('importResult').innerHTML = '';
+  document.getElementById('confirmImportBtn').disabled = true;
+  
+  var lang = (window.SLF.i18n && SLF.i18n.lang) || 'zh';
+  var texts = {
+    zh: { title: '📥 批量导入菜品', desc: '选择 CSV 文件导入菜品，格式：name,category,price,emoji,desc,name_en,desc_en,image（image 填图片URL）', downloadTpl: '📥 下载模板', cancel: '取消', startImport: '开始导入', importing: '导入中...' },
+    en: { title: '📥 Batch Import Menu', desc: 'Select CSV file to import. Format: name,category,price,emoji,desc,name_en,desc_en', downloadTpl: '📥 Download Template', cancel: 'Cancel', startImport: 'Start Import', importing: 'Importing...' },
+    km: { title: '📥 នាំចូលម៉ឺនុយជាដុំ', desc: 'ជ្រើសឯកសារ CSV ដើម្បីនាំចូល', downloadTpl: '📥 ទាញយកគំរូ', cancel: 'បោះបង់', startImport: 'ចាប់ផ្តើមនាំចូល', importing: 'កំពុងនាំចូល...' },
+    th: { title: '📥 นำเข้าเมนูจำนวนมาก', desc: 'เลือกไฟล์ CSV เพื่อนำเข้า', downloadTpl: '📥 ดาวน์โหลดเทมเพลต', cancel: 'ยกเลิก', startImport: 'เริ่มนำเข้า', importing: 'กำลังนำเข้า...' },
+    vi: { title: '📥 Nhập khẩu hàng loạt món ăn', desc: 'Chọn tệp CSV để nhập khẩu', downloadTpl: '📥 Tải xuống mẫu', cancel: 'Hủy', startImport: 'Bắt đầu nhập', importing: 'Đang nhập...' }
+  };
+  var t = texts[lang] || texts.zh;
+  
+  document.querySelector('#importModal h2').textContent = t.title;
+  document.querySelector('#importModal p').textContent = t.desc;
+  document.querySelector('#importModal p a').textContent = t.downloadTpl;
+
+  document.getElementById('confirmImportBtn').textContent = t.startImport;
+}
+
+function closeImportModal() {
+  document.getElementById('importModal').classList.remove('open');
+  importItems = [];
+}
+
+function parseCSV(text) {
+  var lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(function(l) { return l.trim(); });
+  if (lines.length < 2) return [];
+  var headers = lines[0].split(',').map(function(h) { return h.trim(); });
+  var result = [];
+  for (var i = 1; i < lines.length; i++) {
+    var values = lines[i].split(',').map(function(v) { return v.trim(); });
+    var item = {};
+    headers.forEach(function(h, idx) { item[h] = values[idx] || ''; });
+    result.push(item);
+  }
+  return result;
+}
+
+document.getElementById('importFile').addEventListener('change', function(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  if (/\.zip$/i.test(file.name)) {
+    var preview = document.getElementById('importPreview');
+    preview.innerHTML = '<div style="color:#4a9eff;">ZIP: ' + esc(file.name) + ' (' + (file.size/1024).toFixed(1) + ' KB)<br>' + tAdmin('zipImportHint') + '</div>';
+    document.getElementById('confirmImportBtn').disabled = false;
+    window._importZipFile = file;
+    importItems = [];
+    return;
+  }
+  window._importZipFile = null;
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      importItems = parseCSV(ev.target.result);
+      var preview = document.getElementById('importPreview');
+      if (importItems.length === 0) {
+        preview.innerHTML = '<div style="color: #ff6b6b;">' + tAdmin('noValidData') + '</div>';
+        document.getElementById('confirmImportBtn').disabled = true;
+        return;
+      }
+      preview.innerHTML = '<div style="color: #4caf50;">' + tAdmin('parsedPrefix') + importItems.length + tAdmin('parsedSuffix') + '</div>' +
+        importItems.slice(0, 10).map(function(item, i) { 
+          return '<div style="padding: 3px 0; border-bottom: 1px solid #eee;">' + (i+1) + '. '+ esc(item.name) + ' - $' + esc(item.price) + ' (' + esc(item.category) + ')</div>';
+        }).join('') + (importItems.length > 10 ? '<div style="color: #888; padding: 5px 0;">' + tAdmin('moreItemsPrefix') + importItems.length + tAdmin('moreItemsSuffix') + '</div>' : '');
+      document.getElementById('confirmImportBtn').disabled = false;
+    } catch (err) {
+      document.getElementById('importPreview').innerHTML = '<div style="color: #ff6b6b;">' + tAdmin('parseFailedColon') + esc(err.message) + '</div>';
+      document.getElementById('confirmImportBtn').disabled = true;
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+});
+
+async function confirmImport() {
+  if (window._importZipFile) {
+    const f = window._importZipFile;
+    const btn = document.getElementById('confirmImportBtn');
+    btn.disabled = true;
+    btn.textContent = tAdmin('extracting');
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      const data = await SLF.api.upload('/admin/menu/import-zip', fd);
+      let html = '<div style="background:#e8f5e9;color:#2e7d32;padding:10px;border-radius:6px;">' + tAdmin('importOkPrefix') + data.success + tAdmin('importOkSuffix');
+      if (data.imagesImported) html += tAdmin('importedImagesPre') + data.imagesImported + tAdmin('importedImagesSuf');
+      if (data.createdCategories && data.createdCategories.length) html += tAdmin('newCatsPre') + data.createdCategories.length + tAdmin('newCatsSuf');
+      html += '</div>';
+      if (data.failed > 0 && data.errors) html += '<div style="margin-top:5px;font-size:12px;color:#c62828;">' + data.errors.slice(0, 5).map(esc).join('<br>') + '</div>';
+      document.getElementById('importResult').innerHTML = html;
+      window._importZipFile = null;
+      setTimeout(function(){ location.reload(); }, 1500);
+    } catch (e) {
+      document.getElementById('importResult').innerHTML = '<div style="background:#ffebee;color:#c62828;padding:10px;border-radius:6px;">' + tAdmin('failedColon') + esc(e.message) + '</div>';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = tAdmin('startImport');
+    }
+    return;
+  }
+  if (importItems.length === 0) return;
+  // 打开确认弹窗
+  document.getElementById('confirmImportText').textContent = tAdmin('confirmImportPrefix') + importItems.length + tAdmin('itemsOverwriteHint');
+  document.getElementById('confirmImportModal').classList.add('open');
+  // 绑定确认按钮
+  document.getElementById('confirmImportYesBtn').onclick = function() {
+    closeConfirmImport();
+    doImport();
+  };
+}
+
+function closeConfirmImport() {
+  document.getElementById('confirmImportModal').classList.remove('open');
+}
+
+async function doImport() {
+  var btn = document.getElementById('confirmImportBtn');
+  btn.disabled = true;
+  btn.textContent = tAdmin('importing');
+  try {
+    var result = await window.SLF.api.post('/menu/batch', { items: importItems });
+    var createdInfo = '';
+    if (result.createdCategories && result.createdCategories.length > 0) {
+      createdInfo = tAdmin('newCatsListPre') + result.createdCategories.length + tAdmin('newCatsListSuf') + result.createdCategories.map(esc).join('、');
+    }
+    var html = '<div style="background: #e8f5e9; color: #2e7d32; padding: 10px; border-radius: 6px;">' +
+      tAdmin('okImportedPre') + result.success + tAdmin('okImportedMid') + createdInfo;
+    if (result.failed > 0) html += tAdmin('importFailedSuf') + result.failed + tAdmin('importFailedSuf2');
+    html += '</div>';
+    if (result.errors && result.errors.length) {
+      html += '<div style="margin-top: 5px; font-size: 12px; color: #c62828;">' + result.errors.slice(0, 5).map(esc).join('<br>') + '</div>';
+    }
+    document.getElementById('importResult').innerHTML = html;
+    setTimeout(() => location.reload(), 1500);
+  } catch (e) {
+    document.getElementById('importResult').innerHTML = '<div style="background: #ffebee; color: #c62828; padding: 10px; border-radius: 6px;">' + tAdmin('importFailedColon') + esc(e.message) + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = tAdmin('startImport');
+  }
+}
+
+
+async function exportMenuZip() {
+  try {
+    const storeId = SLF.store.rawGetSession('adminStoreId') || SLF.store.rawGet('storeId') || '1';
+    const token = SLF.store.rawGetSession('adminToken') || '';
+    SLF.ui.toast('📦 ' + (tAdmin('exporting') || '正在打包...'));
+    const res = await fetch('/api/admin/menu/export-zip?store_id=' + storeId, { headers: { 'Authorization': 'Bearer ' + token, 'X-Store-Id': String(storeId) } });
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'menu-store' + storeId + '-' + new Date().toISOString().slice(0,10) + '.zip';
+    a.click(); URL.revokeObjectURL(a.href);
+    SLF.ui.toast('✅ ' + (tAdmin('exported') || '已导出'));
+  } catch (e) { SLF.ui.toast('❌ ' + (tAdmin('exportFailed') || '导出失败') + ': ' + e.message); }
+}
+window.exportMenuZip = exportMenuZip;
+
+window.openImportModal = openImportModal;
+window.closeImportModal = closeImportModal;
+window.confirmImport = confirmImport;
+window.closeConfirmImport = closeConfirmImport;
+
+/* ========== pages/admin/table.js ========== */
+/*
+ * pages/admin/table.js — 桌台管理模块
+ */
+(function(){
+'use strict';
+
+const ctx = window.SLF.admin;
+if (!ctx) return;
+
+const { $, api, tAdmin, esc, hasPermission, L, ordersCache, buildSessionLabels } = ctx;
+
+async function loadTables() {
+  const list = await api('/tables');
+  list.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' }));
+  ctx.setTables(list);
+  // 同时获取未结算订单，计算座号状态
+  const orders = await api('/orders?status=pending');
+  const statusText = { available: L('available'), occupied: L('occupied'), reserved: L('reserved') };
+  $('#tables').innerHTML = list.map(t => {
+    const hasPending = orders.some(o => o.table === t.name && o.status === 'pending');
+    const dynamic = hasPending ? 'occupied' : (t.status === 'reserved' ? 'reserved' : 'available');
+    return `<div class="row">
+      <div><b>${esc(t.name)}</b><small><span class="table-status ${dynamic}">${statusText[dynamic] || dynamic}</span></small></div>
+      <div class="actions">
+        ${hasPermission('can_manage_table') ? '<button onclick="editTable(' + t.id + ')">' + L('edit') + '</button>' : ''}
+        <button onclick="showQr(${t.id})">${tAdmin('qr')}</button>
+        ${hasPermission('can_manage_table') ? '<button class="danger" onclick="removeTable(' + t.id + ')">' + L('delete') + '</button>' : ''}
+      </div>
+    </div>`;
+  }).join('') || `<div class="empty-hint">${tAdmin('noData')}</div>`;
+  $('#orderTable').innerHTML = list.map(t => `<option>${esc(t.name)}</option>`).join('');
+}
+
+function removeTable(id) {
+  ctx.showConfirm(tAdmin('confirmDelete'), async function() {
+    try {
+      await api('/tables/' + id, { method: 'DELETE' });
+      loadTables();
+      SLF.ui.toast('✅ ' + tAdmin('deleted'));
+    } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+  });
+}
+
+function editTable(id) { openTableForm(id); }
+
+function openTableForm(id) {
+  const tables = ctx.tablesCache();
+  const t = tables.find(x => String(x.id) === String(id));
+  editingTableId = t ? t.id : null;
+  $('#editTableName').value = t ? t.name : '';
+  $('#editTableStatus').value = t ? t.status : 'available';
+  $('#tableModal').classList.add('open');
+}
+
+function closeTableForm() { $('#tableModal').classList.remove('open'); }
+
+async function showQr(id) {
+  const tables = ctx.tablesCache();
+  const t = tables.find(x => String(x.id) === String(id));
+  if (!t) return;
+
+  // Open synchronously to avoid popup blockers, then fetch the sensitive QR
+  // print page with the authenticated admin session (never put bearer tokens in URLs).
+  const popup = window.open('about:blank', '_blank');
+  if (!popup) {
+    SLF.ui.toast('浏览器阻止了弹窗，请允许本站弹窗后重试');
+    return;
+  }
+  try {
+    const token = SLF.store.rawGetSession('adminToken') || '';
+    const storeId = SLF.store.rawGetSession('adminStoreId') || SLF.store.rawGet('storeId') || '1';
+    if (!token) throw new Error('管理员登录已失效，请重新登录');
+    const response = await fetch('/qr-print?tableId=' + encodeURIComponent(id), {
+      headers: { 'Authorization': 'Bearer ' + token, 'X-Store-Id': String(storeId) },
+      cache: 'no-store'
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || '二维码页面加载失败');
+    }
+    const html = await response.text();
+    popup.document.open();
+    popup.document.write(html);
+    popup.document.close();
+  } catch (error) {
+    popup.close();
+    SLF.ui.toast(error.message || '二维码页面加载失败');
+  }
+}
+
+let editingTableId = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+  const tableSaveBtn = document.getElementById('tableSaveBtn');
+  if (tableSaveBtn) {
+    tableSaveBtn.onclick = async function() {
+      const name = $('#editTableName').value.trim();
+      const status = $('#editTableStatus').value;
+      if (!name) { SLF.ui.toast('❌ ' + tAdmin('tableNameRequired')); return; }
+      try {
+        await api('/tables/' + editingTableId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: { name, status } });
+        closeTableForm();
+        await loadTables();
+        SLF.ui.toast('✅ ' + tAdmin('tableNameLabel') + ' ' + tAdmin('updated'));
+      } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+    };
+  }
+  const tableForm = document.getElementById('tableForm');
+  if (tableForm) {
+    tableForm.onsubmit = async function(e) {
+      e.preventDefault();
+      try {
+        await api('/tables', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: { name: $('#tableName').value.trim() } });
+        e.target.reset();
+        await loadTables();
+        SLF.ui.toast('✅ ' + tAdmin('tableNameLabel') + ' ' + tAdmin('added'));
+      } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+    };
+  }
+});
+
+// 挂到 window
+window.loadTables = loadTables;
+window.removeTable = removeTable;
+window.editTable = editTable;
+window.openTableForm = openTableForm;
+window.closeTableForm = closeTableForm;
+window.showQr = showQr;
+
+})();
+
+
+/* ========== pages/admin/order.js ========== */
+/*
+ * pages/admin/order.js — 订单核心模块
+ */
+(function(){
+'use strict';
+
+const ctx = window.SLF.admin;
+if (!ctx) return;
+
+const { $, api, tAdmin, esc, hasPermission, L, buildSessionLabels } = ctx;
+
+window.orderTableFilter = window.orderTableFilter || '';
+window.orderStatusTab = window.orderStatusTab || 'pending';
+
+function switchOrderTab(tab) {
+  window.orderStatusTab = tab;
+  document.querySelectorAll('#orderTabs .order-tab').forEach(el => {
+    el.classList.toggle('active', el.dataset.tab === tab);
+  });
+  loadOrders();
+}
+window.switchOrderTab = switchOrderTab;
+
+function setOrderFilter(q) {
+  window.orderTableFilter = q;
+  loadOrders();
+}
+
+async function loadOrders() {
+  const orders = await api('/orders');
+  ctx.setOrders(orders);
+  // ===== Tab 筛选 =====
+  const tab = window.orderStatusTab || 'pending';
+  let filtered = orders;
+  if (tab === 'pending')       filtered = filtered.filter(o => o.status === 'pending');
+  else if (tab === 'settled')  filtered = filtered.filter(o => o.status === 'done' || o.status === 'canceled');
+  else if (tab === 'refunded') filtered = filtered.filter(o => o.status === 'refunded');
+
+  // ===== 计数 =====
+  const _c = {
+    pending:  orders.filter(o => o.status === 'pending').length,
+    settled:  orders.filter(o => o.status === 'done' || o.status === 'canceled').length,
+    refunded: orders.filter(o => o.status === 'refunded').length,
+  };
+  const _setCnt = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
+  _setCnt('orderTabPendingCount', _c.pending);
+  _setCnt('orderTabSettledCount', _c.settled);
+  _setCnt('orderTabRefundedCount', _c.refunded);
+
+  if (window.orderTableFilter) {
+    const q = window.orderTableFilter.toLowerCase();
+    filtered = orders.filter(o => (o.table_name||o.table||'').toLowerCase().includes(q) || String(o.id).includes(q) || String(o.order_no||'').includes(q));
+  }
+  const statusText = { pending: L('orderPending'), done: L('orderDone'), canceled: L('canceled'), refunded: L('refunded') || '已退款' };
+  const sessionLabels = buildSessionLabels(filtered);
+  $('#orders').innerHTML = filtered.map(o => `
+      <div class="order-item-admin">
+        <div class="top"><span class="table-info"><strong>${esc(o.order_no||'#'+o.id)}</strong> · ${tAdmin('table')||L('table')} ${esc(o.table)}${sessionLabels.get(o.id) ? ` · <span class="session-badge">${esc(sessionLabels.get(o.id))}</span>` : ''}</span><span class="status ${o.status==='done'?'status-done':o.status==='canceled'?'status-canceled':o.status==='refunded'?'status-refunded':'status-pending'}">${statusText[o.status]||esc(o.status)}</span></div>
+        ${o.note ? `<div class="order-note" style="margin:8px 0;padding:8px 12px;border-radius:10px;background:rgba(255,193,7,.12);border:1px solid rgba(255,193,7,.2);font-size:13px;color:#f0c040;line-height:1.5;"><strong style="color:#ffd93d;">${esc(L('orderNoteDisplay')||tAdmin('note'))}：</strong>${esc(o.note)}</div>` : ''}
+        <div class="items">${(o.items || []).map((item,index) => `
+          <div class="dish-line" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            <span class="dish-name">${esc(item.name)} ×${item.quantity} <span style="color:#e67e22;font-size:12px;">@${SLF.money.primary(SLF.money.toBase(item.price, (item.currency_code||'USD')))}</span>${item.returnedQty > 0 ? ` <small style="color:#e74c3c;">${tAdmin('returned') || '已退回'} ${item.returnedQty}</small>` : ''}</span>
+            <span style="font-weight:600;white-space:nowrap;">${SLF.money.primary(SLF.money.toBase(item.price, (item.currency_code||'USD')) * (item.quantity - (item.returnedQty || 0)))}${window.dualAmountSuffix ? window.dualAmountSuffix(SLF.money.toBase(item.price, (item.currency_code||'USD')) * (item.quantity - (item.returnedQty || 0))) : ''}</span>
+            ${item.itemStatus==='done' ? `<span class="item-status done">${L('itemDone')}</span>` : (o.status==='pending' ? `<button class="item-toggle" onclick="toggleItemStatus(${o.id},${index})">${L('pending')}</button>` : '')}
+          </div>
+        `).join('')}</div>
+        <div class="bottom">
+          <span class="time">${SLF.utils.formatDateTime(o.createdAt)}</span>
+          <span class="total">${SLF.money.primary(o.total)}${window.dualAmountSuffix ? window.dualAmountSuffix(o.total) : ''}</span>
+          <div class="actions">
+            ${o.status==='done' || o.status==='canceled' ? '' : (hasPermission('can_edit_order') ? `<button class="edit" onclick="editOrder(${o.id})">${L('edit')}</button>` : '')}
+            <button onclick="printOrder(${o.id})" style="background:#3498db;">🖨️ ${tAdmin('print')}</button>
+            ${o.status==='pending' ? `<button class="settle-order-btn" onclick="confirmSettleOrder(${o.id})">💰 ${tAdmin('settleOrder')}</button><button class="admin-transfer-order-btn" data-transfer-order-id="${Number(o.id)}" data-transfer-from-table="${esc(o.table_name || '')}" style="background:#9b59b6;">↔ ${tAdmin('transferOrder')}</button>${hasPermission('can_delete_order') ? `<button class="cancel-order-btn" onclick="confirmCancelOrder(${o.id})">🗑️ ${tAdmin('cancelOrder')}</button>` : ''}` : ''}
+            ${hasPermission('can_delete_order') ? `<button class="danger" onclick="removeOrder(${o.id})">${L('delete')}</button>` : ''}
+          </div>
+        </div>
+      </div>
+    `).join('') || `<div class="empty-hint">${tAdmin('noOrders')}</div>`;
+  document.querySelectorAll('#orders .admin-transfer-order-btn').forEach(button => {
+    button.addEventListener('click', function() {
+      const orderId = Number(this.dataset.transferOrderId);
+      if (!Number.isSafeInteger(orderId) || orderId <= 0) return;
+      showTransferModal(orderId, this.dataset.transferFromTable || '');
+    });
+  });
+  if (typeof window.updateOrderSummary === 'function') window.updateOrderSummary();
+}
+window.loadOrders = loadOrders;
+
+let transferOrderId = null;
+let transferFromTable = '';
+let settleOrderId = null;
+
+async function toggleItemStatus(id, index) {
+  try {
+    const orders = ctx.ordersCache();
+    const order = orders.find(o => String(o.id) === String(id));
+    if (!order || !order.items[index]) return;
+    if (order.items[index].itemStatus === 'done') { SLF.ui.toast(`❌ ${tAdmin('cannotRevertDone')}`); return; }
+    await api('/orders/' + id + '/items/' + index, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: { itemStatus: 'done' } });
+    await loadOrders();
+    SLF.ui.toast(`✅ ${tAdmin('dishStatusUpdated')}`);
+  } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+}
+
+async function showTransferModal(orderId, fromTable) {
+  transferFromTable = fromTable;
+  transferOrderId = orderId;
+  document.getElementById('transferTitle').textContent = '↔ ' + tAdmin('transferOrder');
+  document.getElementById('transferToLabel').textContent = tAdmin('transferTo');
+  document.getElementById('transferCancelBtn').textContent = tAdmin('cancel');
+  document.getElementById('transferConfirmBtn').textContent = tAdmin('confirm');
+  document.getElementById('transferFromLabel').textContent = tAdmin('transferFrom') + ': ' + fromTable;
+  const select = document.getElementById('transferTargetSelect');
+  try {
+    const res = await SLF.api.get('/tables');
+    const others = (res.tables || res || []).filter(x => x.name !== fromTable);
+    select.innerHTML = others.map(x => '<option value="' + esc(x.name) + '">' + esc(x.name) + '</option>').join('');
+    document.getElementById('transferModal').classList.add('open');
+  } catch (e) { SLF.ui.toast("❌ " + e.message); }
+}
+function closeTransferModal() {
+  document.getElementById('transferModal').classList.remove('open');
+  transferOrderId = null;
+}
+async function confirmTransfer() {
+  if (!transferOrderId) return;
+  const target = document.getElementById('transferTargetSelect').value;
+  ctx.showConfirm(tAdmin('transferConfirmMsg') + ' ' + transferFromTable + ' → ' + target, async function() {
+    try {
+      const res = await SLF.api.post('/orders/' + transferOrderId + '/transfer', { target_table: target });
+      if (res && res.targetHasOrders) SLF.ui.toast('⚠️ ' + tAdmin('targetHasOrders'));
+      SLF.ui.toast('✅ ' + tAdmin('transferSuccess'));
+      closeTransferModal();
+      loadOrders();
+    } catch (e) { SLF.ui.toast("❌ " + e.message); }
+  });
+}
+
+async function confirmSettleOrder(id) {
+  settleOrderId = id;
+  try {
+    const res = await SLF.api.get('/orders/' + id);
+    const o = res.order || res;
+    const items = (o.items || []).map(i => {
+      const qty = Number(i.quantity||0) - Number(i.returnedQty||0);
+      return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06);">'
+        + '<span>' + esc(i.name) + ' ×' + i.quantity + ' <span style="color:#e67e22;font-size:12px;">@' + SLF.money.primary(SLF.money.toBase(i.price, (i.currency_code||'USD'))) + '</span></span>'
+        + '<span style="font-weight:600;">' + SLF.money.primary(SLF.money.toBase(i.price, (i.currency_code||'USD')) * qty) + '</span></div>';
+    }).join('');
+    document.getElementById('settleDetailBody').innerHTML =
+      '<div style="margin-bottom:12px;color:#888;font-size:13px;">' + (o.order_no||('#'+id)) + ' · ' + esc(o.table_name||'-') + '</div>'
+      + items
+      + '<div style="margin-top:12px;text-align:right;font-size:16px;font-weight:700;">' + tAdmin('total') + ': ' + SLF.money.primary(o.total) + '</div>';
+    document.getElementById('settleDetailModal').classList.add('open');
+  } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+}
+function closeSettleDetail() {
+  document.getElementById('settleDetailModal').classList.remove('open');
+  settleOrderId = null;
+}
+async function doSettleOrder() {
+  if (!settleOrderId) return;
+  const id = settleOrderId;
+  closeSettleDetail();
+  try { await statusOrder(id, 'done'); SLF.ui.toast('✅ ' + tAdmin('settleOrder')); } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+}
+function confirmCancelOrder(id) {
+  ctx.showConfirm(tAdmin('cancelOrderConfirm'), () => statusOrder(id, 'canceled'), tAdmin('cancelOrder'));
+}
+async function statusOrder(id, status) {
+  try {
+    await api('/orders/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: { status } });
+    await loadOrders();
+    SLF.ui.toast('✅ ' + tAdmin('orderManage') + ' ' + tAdmin('updated'));
+  } catch (e) {
+    const msg = e.message.includes('未完成菜品') ? (L('incompleteItemsError') || e.message) : e.message;
+    SLF.ui.toast('❌ ' + msg);
+    throw e;
+  }
+}
+function removeOrder(id) {
+  ctx.showPasswordModal(tAdmin('passwordModalMessage') || '请输入管理员密码以确认操作', async function(password) {
+    try {
+      await api('/orders/' + id, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: { password } });
+      await loadOrders();
+      SLF.ui.toast('✅ ' + tAdmin('deleted'));
+    } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+  });
+}
+
+let editingOrderId = null;
+let editingOrderStatus = 'pending';
+
+function openOrderForm() {
+  editingOrderId = null;
+  editingOrderStatus = 'pending';
+  $('#orderModalTitle').textContent = tAdmin('addOrder');
+  $('#orderTable').disabled = false;
+  const tables = ctx.tablesCache();
+  if (tables.length) $('#orderTable').value = tables[0].name;
+  $('#orderItems').innerHTML = '';
+  $('#orderNoteField').value = '';
+  addOrderItem();
+  updateOrderTotal();
+  $('#orderModal').classList.add('open');
+}
+function closeOrderForm() { $('#orderModal').classList.remove('open'); }
+function removeOrderItem(btn) { btn.closest('.order-item-line').remove(); updateOrderTotal(); }
+function updateOrderTotal() {
+  let total = 0;
+  document.querySelectorAll('#orderItems .order-item-line').forEach(row => {
+    const id = +row.querySelector('select').value;
+    const qty = +row.querySelector('input').value || 0;
+    const menus = ctx.menusCache();
+    const menu = menus.find(m => String(m.id) === String(id));
+    if (menu && qty > 0) total += SLF.money.toBase(menu.price, (menu.currency_code||'USD')) * qty;
+  });
+  $('#orderFormTotal').textContent = SLF.money.primary(total);
+}
+function addOrderItem(selectedId, quantity) {
+  const menus = ctx.menusCache();
+  const line = document.createElement('div');
+  line.className = 'order-item-line';
+  line.innerHTML = `
+    <select>${menus.map(m => `<option value="${m.id}">${esc(m.emoji||'🍽️')} ${esc(m.name)} · ${SLF.money.primary(SLF.money.toBase(m.price, (m.currency_code||'USD')))}</option>`).join('')}</select>
+    <input type="number" min="1" step="1" value="${quantity||1}">
+    <button onclick="removeOrderItem(this)">✕</button>
+  `;
+  if (selectedId) line.querySelector('select').value = selectedId;
+  line.querySelectorAll('select,input').forEach(el => {
+    el.addEventListener('input', updateOrderTotal);
+    el.addEventListener('change', updateOrderTotal);
+  });
+  $('#orderItems').appendChild(line);
+  updateOrderTotal();
+}
+function addLockedOrderItem(item) {
+  const line = document.createElement('div');
+  line.className = 'order-item-line locked';
+  line.dataset.status = 'done';
+  line.innerHTML = `
+    <select disabled><option value="${item.id}" selected>${esc(item.name)}</option></select>
+    <input type="number" value="${item.quantity}" disabled>
+    <span class="item-status done">${L('itemDone')}</span>
+  `;
+  $('#orderItems').appendChild(line);
+  updateOrderTotal();
+}
+
+async function editOrder(id) {
+  try {
+    let orders = ctx.ordersCache();
+    let o = orders.find(x => String(x.id) === String(id));
+    if (!o) o = await api('/orders/' + id);
+    if (!o) return;
+    editingOrderId = id;
+    editingOrderStatus = o.status || 'pending';
+    $('#orderModalTitle').textContent = tAdmin('orderManage') + ' ' + (o.order_no || ('#'+id));
+    $('#orderTable').value = o.table;
+    $('#orderTable').disabled = true;
+    $('#orderItems').innerHTML = '';
+    (o.items || []).forEach(item => {
+      if (item.itemStatus === 'done') addLockedOrderItem(item);
+      else addOrderItem(item.id, item.quantity);
+    });
+    $('#orderNoteField').value = o.note || '';
+    updateOrderTotal();
+    $('#orderModal').classList.add('open');
+  } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const orderSaveBtn = document.getElementById('orderSaveBtn');
+  if (orderSaveBtn) {
+    orderSaveBtn.onclick = async function() {
+      const rows = [...document.querySelectorAll('#orderItems .order-item-line')];
+      const items = [];
+      rows.forEach(row => {
+        const id = +row.querySelector('select').value;
+        const qty = +row.querySelector('input').value || 0;
+        if (id && qty > 0) items.push({ id: id, quantity: qty });
+      });
+      if (!items.length) { SLF.ui.toast('❌ ' + tAdmin('noItems')); return; }
+      try {
+        await api(editingOrderId ? '/orders/' + editingOrderId : '/orders', { method: editingOrderId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: {
+          table: $('#orderTable').value,
+          note: $('#orderNoteField').value.trim(),
+          items
+        }});
+        closeOrderForm();
+        await loadOrders();
+        SLF.ui.toast('✅ ' + tAdmin('orderManage') + ' ' + (editingOrderId ? tAdmin('updated') : tAdmin('added')));
+      } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+    };
+  }
+  const addOrderItemBtn = document.getElementById('addOrderItemBtn');
+  if (addOrderItemBtn) addOrderItemBtn.onclick = function() { addOrderItem(); };
+});
+
+// 挂到 window
+window.loadOrders = loadOrders;
+window.setOrderFilter = setOrderFilter;
+window.toggleItemStatus = toggleItemStatus;
+window.showTransferModal = showTransferModal;
+window.closeTransferModal = closeTransferModal;
+window.confirmTransfer = confirmTransfer;
+window.confirmSettleOrder = confirmSettleOrder;
+window.closeSettleDetail = closeSettleDetail;
+window.doSettleOrder = doSettleOrder;
+window.confirmCancelOrder = confirmCancelOrder;
+window.statusOrder = statusOrder;
+window.removeOrder = removeOrder;
+window.openOrderForm = openOrderForm;
+window.closeOrderForm = closeOrderForm;
+window.removeOrderItem = removeOrderItem;
+window.updateOrderTotal = updateOrderTotal;
+window.addOrderItem = addOrderItem;
+window.addLockedOrderItem = addLockedOrderItem;
+window.editOrder = editOrder;
+
+})();
+
+
+/* ========== pages/admin/shared.js ========== */
+/*
+ * pages/admin/shared.js — 共享工具函数
+ */
+(function(){
+'use strict';
+
+const ctx = window.SLF.admin;
+if (!ctx) return;
+
+const { $, api, tAdmin, esc, L } = ctx;
+
+function dualAmountSuffix(base) {
+  if (!ctx.dualCurrencyEnabled() || !ctx.secondaryCurrencyCode()) return '';
+  const sec = SLF.money.secondary(base, ctx.secondaryCurrencyCode());
+  return sec ? ` (${sec})` : '';
+}
+
+function translateLoginMessage(msg) {
+  if (!msg) return '';
+  if (msg.includes('商户管理员登录成功')) { const username = msg.split(':')[1] || ''; return tAdmin('merchantAdminLogin') + ': ' + username.trim(); }
+  if (msg.includes('超级管理员登录成功')) { const username = msg.split(':')[1] || ''; return tAdmin('superAdminLogin') + ': ' + username.trim(); }
+  if (msg.includes('服务员登录成功')) return tAdmin('loginSuccess') || '登录成功';
+  if (msg.includes('收银员登录成功')) return tAdmin('loginSuccess') || '登录成功';
+  if (msg.includes('用户名不存在')) return tAdmin('usernameNotExist');
+  if (msg.includes('密码错误')) return tAdmin('passwordError');
+  if (msg.includes('账号不存在')) return tAdmin('usernameNotExist');
+  if (msg.includes('请输入用户名和密码')) return tAdmin('pleaseEnterCredentials');
+  if (msg.includes('IP不在白名单内')) return tAdmin('noPermission') || '无权限';
+  return msg;
+}
+
+async function loadLoginLogs() {
+  try {
+    const logs = await api('/admin/login-logs');
+    $('#loginLogs').innerHTML = logs.length ?
+      logs.map(log => `<div class="row"><div><b>${SLF.utils.formatDateTime(log.createdAt)}</b><small>${esc(log.ip||'-')} · ${esc(translateLoginMessage(log.message))}</small></div><span class="badge ${log.success?'done':'canceled'}">${log.success ? tAdmin('loginSuccess') : tAdmin('loginFailed')}</span></div>`).join('') :
+      `<div class="empty-hint">${tAdmin('noData')}</div>`;
+  } catch (e) {
+    $('#loginLogs').innerHTML = `<div class="empty-hint">${tAdmin('noData')}</div>`;
+  }
+}
+
+function updateOrderSummary() {
+  const orders = ctx.ordersCache();
+  // 统计未结算订单
+  const pending = orders.filter(o => o.status === 'pending');
+  const pendingTotal = pending.reduce((sum, o) => sum + Number(o.total || 0), 0);
+  const pendingCountEl = document.getElementById('pendingOrderCount');
+  const pendingAmountEl = document.getElementById('pendingOrderAmount');
+  if (pendingCountEl) pendingCountEl.textContent = pending.length;
+  if (pendingAmountEl) pendingAmountEl.textContent = SLF.money.primary(pendingTotal);
+  // 已结算订单包含部分退款（done）和全额退款（refunded）；金额按退款后净额统计。
+  const done = orders.filter(o => o.status === 'done' || o.status === 'refunded');
+  const hasInvalidFinancialData = done.some(o => {
+    const total = o.total === null || o.total === undefined || o.total === '' ? NaN : Number(o.total);
+    const refunded = o.refund_amount === null || o.refund_amount === undefined || o.refund_amount === '' ? 0 : Number(o.refund_amount);
+    return o.financialDataCorrupted === true || !Number.isFinite(total) || total < 0 ||
+      !Number.isFinite(refunded) || refunded < 0 || refunded > total;
+  });
+  const doneTotal = hasInvalidFinancialData ? null : done.reduce((sum, o) => {
+    const total = Number(o.total);
+    const refunded = Number(o.refund_amount || 0);
+    return sum + (total - refunded);
+  }, 0);
+  const doneCountEl = document.getElementById('doneOrderCount');
+  const doneAmountEl = document.getElementById('doneOrderAmount');
+  if (doneCountEl) doneCountEl.textContent = done.length;
+  if (doneAmountEl) {
+    doneAmountEl.textContent = hasInvalidFinancialData ? '数据异常' : SLF.money.primary(doneTotal);
+    doneAmountEl.title = hasInvalidFinancialData
+      ? '存在异常订单金额或退款记录，经营汇总暂不可用，请核对订单数据'
+      : '';
+  }
+}
+
+function closeSidebar() {
+  const sidebar = document.getElementById("adminSidebar");
+  if (sidebar) sidebar.classList.remove("open");
+  const overlay = document.getElementById("sidebarOverlay");
+  if (overlay) overlay.classList.remove("show");
+}
+
+function toggleSidebar() {
+  const sidebar = document.getElementById('adminSidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (!sidebar) return;
+  sidebar.classList.toggle('open');
+  if (overlay) overlay.classList.toggle('show');
+}
+
+function getCurrentModule() {
+  const activeNav = document.querySelector(".nav-item.active");
+  return activeNav ? activeNav.dataset.module : null;
+}
+
+function switchAdminModule(module, opts) {
+  opts = opts || {};
+  const permMap = {
+    menu: 'can_manage_menu', tables: 'can_manage_table', orders: 'can_manage_order',
+    stores: 'can_manage_store', waiters: 'can_manage_waiter', currencies: 'can_manage_currency',
+    printers: 'can_manage_printer', admins: 'can_manage_admin', cashiers: 'can_manage_cashier',
+    logs: 'can_view_logs', 'financial-reconciliation': 'can_manage_financial_reconciliation'
+  };
+  const needPerm = permMap[module];
+  if (needPerm && ctx.hasPermission && !ctx.hasPermission(needPerm)) {
+    const msg = ctx.tAdmin ? ctx.tAdmin('noPermission') : 'No permission';
+    if (SLF.ui && SLF.ui.toast) SLF.ui.toast('❌ ' + msg);
+    return;
+  }
+  document.querySelectorAll('.module-panel').forEach(m => m.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const panel = document.getElementById('module-' + module);
+  if (panel) panel.classList.add('active');
+  const navItem = document.querySelector(`.nav-item[data-module="${module}"]`);
+  if (navItem) navItem.classList.add('active');
+
+  // opts.skipLoad: 只切 UI，不重新加载数据（refresh() 里已预加载过所有模块）
+  if (opts.skipLoad) return;
+
+  if (module === 'menu') { if (window.loadMenus) window.loadMenus(); if (window.loadMenuCategories) window.loadMenuCategories(); }
+  if (module === 'tables') { if (window.loadTables) window.loadTables(); }
+  if (module === 'orders') { if (window.loadOrders) window.loadOrders(); }
+  if (module === 'currencies') { if (window.loadCurrencies) window.loadCurrencies(); if (window.loadDisplaySettings) window.loadDisplaySettings(); }
+  if (module === 'stores') { if (window.loadStores) window.loadStores(); }
+  if (module === 'waiters') { if (window.loadWaiters) window.loadWaiters(); }
+  if (module === 'admins') { if (window.loadAdmins) window.loadAdmins(); }
+  if (module === 'cashiers') { if (window.loadCashiers) window.loadCashiers(); }
+  if (module === 'printers') { if (window.loadPrinters) window.loadPrinters(); }
+  if (module === 'reports') { if (window.loadReportSummary) window.loadReportSummary(); if (window.loadDailyReport) window.loadDailyReport(); }
+  if (module === 'calls') { if (window.loadWaiterCalls) window.loadWaiterCalls(); }
+  if (module === 'logs') { if (window.loadLoginLogs) window.loadLoginLogs(); if (window.loadAuditLogs) window.loadAuditLogs(); }
+  if (module === 'financial-reconciliation' && window.loadFinancialReconciliation) window.loadFinancialReconciliation();
+}
+
+// 汉堡按钮拖动
+(function() {
+  const btn = document.getElementById('hamburgerBtn');
+  if (!btn) return;
+  let isDragging = false;
+  let startX, startY, startLeft, startTop;
+  let hasMoved = false;
+  function getPos(e) {
+    if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    return { x: e.clientX, y: e.clientY };
+  }
+  function onStart(e) {
+    isDragging = true;
+    hasMoved = false;
+    const pos = getPos(e);
+    startX = pos.x; startY = pos.y;
+    const rect = btn.getBoundingClientRect();
+    startLeft = rect.left; startTop = rect.top;
+    btn.classList.add('dragging');
+    btn.style.transition = 'none';
+  }
+  function onMove(e) {
+    if (!isDragging) return;
+    const pos = getPos(e);
+    const dx = pos.x - startX, dy = pos.y - startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) { hasMoved = true; e.preventDefault(); }
+    let newLeft = Math.max(0, Math.min(window.innerWidth - btn.offsetWidth, startLeft + dx));
+    let newTop = Math.max(0, Math.min(window.innerHeight - btn.offsetHeight, startTop + dy));
+    btn.style.left = newLeft + 'px';
+    btn.style.top = newTop + 'px';
+    e.preventDefault();
+  }
+  function onEnd() {
+    if (!isDragging) return;
+    isDragging = false;
+    btn.classList.remove('dragging');
+    btn.style.transition = '';
+    if (hasMoved) {
+      const rect = btn.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      if (centerX < window.innerWidth / 2) btn.style.left = '8px';
+      else btn.style.left = (window.innerWidth - btn.offsetWidth - 8) + 'px';
+      if (rect.top < 60) btn.style.top = '8px';
+      else if (rect.bottom > window.innerHeight - 60) btn.style.top = (window.innerHeight - btn.offsetHeight - 8) + 'px';
+    }
+  }
+  btn.addEventListener('mousedown', onStart);
+  btn.addEventListener('touchstart', onStart, { passive: false });
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('mouseup', onEnd);
+  document.addEventListener('touchend', onEnd);
+})();
+
+function logoutAdmin() {
+  SLF.store.rawRemoveSession('adminToken');
+  SLF.store.rawRemoveSession('adminId');
+  SLF.store.rawRemoveSession('adminPermissions');
+  SLF.store.rawRemoveSession('adminIsPrimary');
+  // 清理商户相关的 storeId，避免下次登录其它商户时残留
+  SLF.store.rawRemoveSession('adminStoreId');
+  SLF.store.rawRemoveSession('adminMerchantId');
+  SLF.store.rawRemoveSession('adminMerchantName');
+  SLF.store.rawRemove('storeId');
+  location.href = '/login';
+}
+
+function showAdminInfo() {
+  document.getElementById('adminInfoModal').classList.add('open');
+}
+function hideAdminInfo() {
+  document.getElementById('adminInfoModal').classList.remove('open');
+}
+
+async function updateReservation(id, status) {
+  try {
+    await api('/admin/reservations/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: { status } });
+    SLF.ui.toast(tAdmin('reservationUpdated'));
+    if (typeof loadReservations === 'function') loadReservations();
+  } catch (err) {
+    SLF.ui.toast(tAdmin('updateFailed') + ': ' + err.message);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const passwordForm = document.getElementById('passwordForm');
+  if (passwordForm) {
+    passwordForm.onsubmit = async function(e) {
+      e.preventDefault();
+      try {
+        await api('/admin/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: {
+          oldPassword: $('#oldPassword').value,
+          newPassword: $('#newPassword').value
+        }});
+        e.target.reset();
+        SLF.ui.toast('✅ ' + tAdmin('passwordTitle') + ' ' + tAdmin('updated'));
+      } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+    };
+  }
+  const resetDataBtn = document.getElementById('resetDataBtn');
+  if (resetDataBtn) {
+    resetDataBtn.onclick = function() {
+      ctx.showPasswordModal(tAdmin('resetDataPasswordMsg'), function(password) {
+        ctx.showConfirm(tAdmin('resetDataConfirmMsg'), async function() {
+          try {
+            await SLF.api.post('/admin/reset-data', { password });
+            SLF.ui.toast('✅ ' + tAdmin('resetSuccess'));
+            if (window.loadOrders) await window.loadOrders();
+            if (window.loadTables) await window.loadTables();
+            if (window.loadLoginLogs) await window.loadLoginLogs();
+          } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+        }, tAdmin('resetDataConfirmTitle'));
+      }, tAdmin('resetDataPasswordTitle'));
+    };
+  }
+  const adminLang = document.getElementById('adminLang');
+  if (adminLang) {
+    adminLang.onchange = async function() {
+      const lang = this.value;
+      SLF.store.rawSet('adminLang', lang);
+      // 先加载语言字典
+      try { if (window.loadAdminLanguage) await window.loadAdminLanguage(lang); } catch(e) { console.error('loadAdminLanguage:', e); }
+      try { if (window.applyAdminLanguage) window.applyAdminLanguage(); } catch(e) { console.error('applyAdminLanguage:', e); }
+      try { if (window.loadAdminInfo) window.loadAdminInfo(); } catch(e) { console.error('loadAdminInfo:', e); }
+      const navItem = document.querySelector('.nav-item.active');
+      if (navItem && window.switchAdminModule) window.switchAdminModule(navItem.dataset.module);
+    };
+  }
+  const adminStoreSelect = document.getElementById('adminStoreSelect');
+  if (adminStoreSelect) {
+    adminStoreSelect.onchange = function() {
+      SLF.store.rawSetSession('adminStoreId', this.value);
+      SLF.store.rawSet('storeId', String(this.value));
+      if (window._adminSocket && typeof window._adminSocket.disconnect === 'function') {
+        try { window._adminSocket.disconnect(); window._adminSocket.connect(); } catch(_) {}
+      }
+      if (window.updateSidebarStore) window.updateSidebarStore();
+      // 重载当前激活模块（switchAdminModule 内部会调用对应 loadXxx）
+      try {
+        const activeNav = document.querySelector('.nav-item.active');
+        const mod = activeNav && activeNav.dataset.module;
+        if (mod && typeof window.switchAdminModule === 'function') {
+          window.switchAdminModule(mod);
+        } else if (typeof window.refresh === 'function') {
+          window.refresh();
+        }
+      } catch(_) {}
+    };
+  }
+  const pwdInput = document.getElementById('passwordModalInput');
+  if (pwdInput) {
+    pwdInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && window.executePasswordModal) window.executePasswordModal();
+    });
+  }
+  const confirmModal = document.getElementById('confirmModal');
+  if (confirmModal) {
+    confirmModal.addEventListener('click', function(e) {
+      if (e.target === this && window.hideConfirm) window.hideConfirm();
+    });
+  }
+  const adminInfoModal = document.getElementById('adminInfoModal');
+  if (adminInfoModal) {
+    adminInfoModal.addEventListener('click', function(e) {
+      if (e.target === this && window.hideAdminInfo) window.hideAdminInfo();
+    });
+  }
+});
+
+// 挂到 window
+window.dualAmountSuffix = dualAmountSuffix;
+window.translateLoginMessage = translateLoginMessage;
+window.loadLoginLogs = loadLoginLogs;
+window.updateOrderSummary = updateOrderSummary;
+window.switchAdminModule = switchAdminModule;
+window.getCurrentModule = getCurrentModule;
+window.toggleSidebar = toggleSidebar;
+window.closeSidebar = closeSidebar;
+window.logoutAdmin = logoutAdmin;
+window.showAdminInfo = showAdminInfo;
+window.hideAdminInfo = hideAdminInfo;
+window.updateReservation = updateReservation;
+
+})();
+
