@@ -47,6 +47,20 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   await runAsync('DROP TABLE IF EXISTS telegram_notification_outbox');
   await ensureTelegramNotificationOutboxSchema({ runAsync, getAsync });
   await ensureTelegramNotificationOutboxSchema({ runAsync, getAsync });
+  // Simulate the previous global event_key index and verify an in-place upgrade.
+  await runAsync('ALTER TABLE telegram_notification_outbox DROP INDEX uq_telegram_outbox_scoped_event');
+  await runAsync('ALTER TABLE telegram_notification_outbox ADD UNIQUE KEY uq_telegram_outbox_event (event_key)');
+  await ensureTelegramNotificationOutboxSchema({ runAsync, getAsync });
+  const scopedDedupeIndex = await getAsync(
+    'SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=?',
+    ['telegram_notification_outbox', 'uq_telegram_outbox_scoped_event']
+  );
+  const legacyDedupeIndex = await getAsync(
+    'SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=?',
+    ['telegram_notification_outbox', 'uq_telegram_outbox_event']
+  );
+  assert.ok(scopedDedupeIndex, 'migration must create the tenant-scoped unique index');
+  assert.equal(legacyDedupeIndex, null, 'migration must remove the former global unique index');
   // Upgrade a pre-existing outbox table using the old state enum and no message receipt column.
   await runAsync("ALTER TABLE telegram_notification_outbox MODIFY COLUMN state ENUM('pending','processing','delivered','dead') NOT NULL DEFAULT 'pending'");
   await runAsync('ALTER TABLE telegram_notification_outbox DROP COLUMN telegram_message_id');
