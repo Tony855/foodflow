@@ -92,3 +92,12 @@ ORDER BY state, recipient_scope, last_error_code;
 ```
 
 - The full client/merchant notification workflow still requires staging end-to-end tests before production enablement.
+
+
+## Notification delivery safety
+
+Outgoing business notifications use a database outbox with a unique event key. A task moves through `pending`, `processing`, and `sending` before Telegram is called. The `sending` state is persisted before the external request so an expired send lease is never automatically replayed.
+
+If the Telegram response is ambiguous (network timeout, unreadable response, or HTTP 5xx), the task is moved to `uncertain` and requires operator review. This intentionally favors avoiding duplicate customer messages over silently retrying a send that Telegram may already have accepted. Confirmed successful responses are stored as `delivered` together with Telegram's message ID. Explicit Telegram rejections such as invalid chat permissions and flood control continue through the normal safe retry/dead-letter path.
+
+Telegram does not provide a general idempotency key for `sendMessage`; therefore absolute exactly-once delivery cannot be guaranteed. Operators should inspect `uncertain` rows before any manual replay.
