@@ -8,7 +8,7 @@ const token = '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi';
 
 test('legacy system admin notifications are suppressed and mismatched tenant metadata is rejected', async () => {
   let calls = 0;
-  const resolve = createTelegramNotificationRecipientResolver({ allAsync: async () => { calls++; return settings(); } });
+  const resolve = createTelegramNotificationRecipientResolver({ allAsync: async () => { calls++; return []; } });
   assert.equal(await resolve({ scope: 'customer', key: 'binding:1' }), null);
   assert.equal(await resolve({ scope: 'merchant_store', key: 'store:1', merchantId: 1, storeId: 2 }), null);
   assert.deepEqual(await resolve({ scope: 'system_admin', key: 'admin:primary', merchantId: null, storeId: null }), { scope: 'system_admin', merchantId: null, storeId: null, suppressed: true });
