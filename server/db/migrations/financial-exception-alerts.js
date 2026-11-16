@@ -1,5 +1,7 @@
 'use strict';
 
+const { ensureFinanceUniqueIndex } = require('./finance-unique-index');
+
 async function ensureFinancialExceptionAlertSchema({ runAsync, allAsync }) {
   if (typeof runAsync !== 'function' || typeof allAsync !== 'function') throw new TypeError('runAsync and allAsync are required');
   await runAsync(`
@@ -44,6 +46,20 @@ async function ensureFinancialExceptionAlertSchema({ runAsync, allAsync }) {
   const requiredEvent = ['id','alert_id','merchant_id','store_id','actor_admin_id','actor_username','action','reason','idempotency_key','request_sha256','previous_hash','event_hash','created_at'];
   const missingEvent = requiredEvent.filter(name => !eventCols.some(col => col.Field === name));
   if (missingEvent.length) throw new Error('financial exception alert event schema is incomplete: ' + missingEvent.join(', '));
+  await ensureFinanceUniqueIndex({
+    runAsync, allAsync,
+    tableName: 'financial_reconciliation_exception_alerts',
+    indexName: 'unique_finance_exception_alert',
+    columns: ['merchant_id', 'store_id', 'item_id', 'alert_type', 'sla_hours'],
+    duplicateMessage: 'duplicate financial exception alerts must be resolved before migration'
+  });
+  await ensureFinanceUniqueIndex({
+    runAsync, allAsync,
+    tableName: 'financial_reconciliation_exception_alert_events',
+    indexName: 'unique_finance_exception_alert_event',
+    columns: ['alert_id', 'idempotency_key'],
+    duplicateMessage: 'duplicate financial exception alert idempotency keys must be resolved before migration'
+  });
 }
 
 module.exports = { ensureFinancialExceptionAlertSchema };

@@ -17,6 +17,16 @@ test('exception workflow schema creates tenant-scoped case and immutable event t
         'reason','before_json','after_json','idempotency_key','request_sha256','previous_hash','event_hash','created_at']
         .map(Field => ({ Field }));
     }
+    if (sql === 'SHOW INDEX FROM financial_reconciliation_exception_cases') {
+      return ['merchant_id','store_id','item_id'].map((Column_name, index) => ({
+        Key_name: 'unique_finance_exception_case_item', Non_unique: 0, Seq_in_index: index + 1, Column_name, Sub_part: null
+      }));
+    }
+    if (sql === 'SHOW INDEX FROM financial_reconciliation_exception_events') {
+      return ['merchant_id','store_id','item_id','idempotency_key'].map((Column_name, index) => ({
+        Key_name: 'unique_finance_exception_event_idempotency', Non_unique: 0, Seq_in_index: index + 1, Column_name, Sub_part: null
+      }));
+    }
     throw new Error('unexpected SQL: ' + sql);
   };
   await ensureFinancialExceptionWorkflowSchema({ runAsync: async sql => statements.push(sql), allAsync });

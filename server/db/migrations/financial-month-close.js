@@ -1,5 +1,7 @@
 'use strict';
 
+const { ensureFinanceUniqueIndex } = require('./finance-unique-index');
+
 async function ensureFinancialMonthCloseSchema({ runAsync, allAsync }) {
   if (typeof runAsync !== 'function' || typeof allAsync !== 'function') {
     throw new TypeError('runAsync and allAsync are required');
@@ -78,29 +80,20 @@ async function ensureFinancialMonthCloseSchema({ runAsync, allAsync }) {
     throw new Error('financial_month_close_events schema is incomplete: ' + missingEventColumns.join(', '));
   }
 
-  const periodIndexes = await allAsync('SHOW INDEX FROM financial_month_close_periods');
-  if (!periodIndexes.some(index => index.Key_name === 'unique_financial_month_period')) {
-    const duplicate = await allAsync(
-      `SELECT merchant_id, store_id, period_month, currency_code, COUNT(*) AS duplicate_count
-       FROM financial_month_close_periods
-       GROUP BY merchant_id, store_id, period_month, currency_code
-       HAVING COUNT(*) > 1 LIMIT 1`
-    );
-    if (duplicate.length) throw new Error('duplicate financial month close periods must be resolved before migration');
-    await runAsync('CREATE UNIQUE INDEX unique_financial_month_period ON financial_month_close_periods (merchant_id, store_id, period_month, currency_code)');
-  }
-
-  const eventIndexes = await allAsync('SHOW INDEX FROM financial_month_close_events');
-  if (!eventIndexes.some(index => index.Key_name === 'unique_financial_month_close_idempotency')) {
-    const duplicate = await allAsync(
-      `SELECT period_id, idempotency_key, COUNT(*) AS duplicate_count
-       FROM financial_month_close_events
-       GROUP BY period_id, idempotency_key
-       HAVING COUNT(*) > 1 LIMIT 1`
-    );
-    if (duplicate.length) throw new Error('duplicate financial month close idempotency keys must be resolved before migration');
-    await runAsync('CREATE UNIQUE INDEX unique_financial_month_close_idempotency ON financial_month_close_events (period_id, idempotency_key)');
-  }
+  await ensureFinanceUniqueIndex({
+    runAsync, allAsync,
+    tableName: 'financial_month_close_periods',
+    indexName: 'unique_financial_month_period',
+    columns: ['merchant_id', 'store_id', 'period_month', 'currency_code'],
+    duplicateMessage: 'duplicate financial month close periods must be resolved before migration'
+  });
+  await ensureFinanceUniqueIndex({
+    runAsync, allAsync,
+    tableName: 'financial_month_close_events',
+    indexName: 'unique_financial_month_close_idempotency',
+    columns: ['period_id', 'idempotency_key'],
+    duplicateMessage: 'duplicate financial month close idempotency keys must be resolved before migration'
+  });
 }
 
 async function lockOpenFinancialMonthPeriod({ runAsync, getAsync, merchantId, storeId, periodMonth, currencyCode }) {
@@ -203,6 +196,20 @@ async function ensureFinancialExceptionWorkflowSchema({ runAsync, allAsync }) {
   ];
   const missingEventColumns = requiredEventColumns.filter(name => !eventNames.has(name));
   if (missingEventColumns.length) throw new Error('financial exception event schema is incomplete: ' + missingEventColumns.join(', '));
+  await ensureFinanceUniqueIndex({
+    runAsync, allAsync,
+    tableName: 'financial_reconciliation_exception_cases',
+    indexName: 'unique_finance_exception_case_item',
+    columns: ['merchant_id', 'store_id', 'item_id'],
+    duplicateMessage: 'duplicate financial exception cases must be resolved before migration'
+  });
+  await ensureFinanceUniqueIndex({
+    runAsync, allAsync,
+    tableName: 'financial_reconciliation_exception_events',
+    indexName: 'unique_finance_exception_event_idempotency',
+    columns: ['merchant_id', 'store_id', 'item_id', 'idempotency_key'],
+    duplicateMessage: 'duplicate financial exception event idempotency keys must be resolved before migration'
+  });
 }
 
 module.exports = { ensureFinancialMonthCloseSchema, ensureFinancialExceptionWorkflowSchema, lockOpenFinancialMonthPeriod };
