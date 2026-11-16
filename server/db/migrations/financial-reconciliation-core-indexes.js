@@ -89,6 +89,16 @@ function isReviewEventColumnTypeSafe(name, column, contract) {
   const base = columnTypeBase(type);
   if (!type) return false;
 
+  if (contract.kind === 'integer') {
+    return /^(tinyint|smallint|mediumint|int|integer|bigint)(?:\\s*\\(\\s*\\d+\\s*\\))?(?:\\s+unsigned)?$/i.test(type);
+  }
+
+  if (contract.kind === 'exception_category') {
+    const values = enumValues(type);
+    if (values) return REVIEW_EVENT_ALLOWED_EXCEPTION_CATEGORIES.every(category => values.includes(category));
+    return stringCapacity(type) >= Math.max(...REVIEW_EVENT_ALLOWED_EXCEPTION_CATEGORIES.map(category => category.length));
+  }
+
   if (contract.kind === 'auto_increment_id') {
     return /^(tinyint|smallint|mediumint|int|integer|bigint)(?:\s*\(\s*\d+\s*\))?(?:\s+unsigned)?$/i.test(type) &&
       String(column.Key || '').toUpperCase() === 'PRI' &&
