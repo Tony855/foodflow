@@ -653,6 +653,6 @@ app.post('/api/menu-categories/sort', requireAdminKey, requirePermission('can_ma
   } catch (e) { res.status(e.status || 500).json({ error: e.status ? e.message : '分类排序失败，所有更改已回滚' }); }
 });
 
-// ----- 桌号 -----
+// ----- 座号 -----
 
 };
