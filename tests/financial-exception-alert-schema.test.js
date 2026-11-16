@@ -19,6 +19,7 @@ const makeIndexes = (name, columns) => columns.map((Column_name, index) => ({
 test('exception alert migration verifies the exact deduplication and idempotency indexes', async () => {
   const writes = [];
   const allAsync = async sql => {
+    if (sql.startsWith('SELECT ENGINE FROM information_schema.TABLES')) return [{ ENGINE: 'InnoDB' }];
     if (sql === 'SHOW COLUMNS FROM financial_reconciliation_exception_alerts') return alertColumns.map(Field => ({ Field, Null: 'NO' }));
     if (sql === 'SHOW COLUMNS FROM financial_reconciliation_exception_alert_events') return eventColumns.map(Field => ({ Field, Null: 'NO' }));
     if (sql === 'SHOW INDEX FROM financial_reconciliation_exception_alerts') {
@@ -37,6 +38,7 @@ test('exception alert migration verifies the exact deduplication and idempotency
 test('exception alert migration repairs missing indexes on an existing populated schema', async () => {
   const writes = [];
   const allAsync = async sql => {
+    if (sql.startsWith('SELECT ENGINE FROM information_schema.TABLES')) return [{ ENGINE: 'InnoDB' }];
     if (sql === 'SHOW COLUMNS FROM financial_reconciliation_exception_alerts') return alertColumns.map(Field => ({ Field, Null: 'NO' }));
     if (sql === 'SHOW COLUMNS FROM financial_reconciliation_exception_alert_events') return eventColumns.map(Field => ({ Field, Null: 'NO' }));
     if (sql === 'SHOW INDEX FROM financial_reconciliation_exception_alerts' ||

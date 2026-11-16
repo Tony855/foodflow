@@ -30,6 +30,27 @@ function schemaError(code, message) {
   return error;
 }
 
+async function ensureFinanceInnoDBTable({ allAsync, tableName }) {
+  if (typeof allAsync !== 'function') throw new TypeError('allAsync is required');
+  assertIdentifier(tableName, 'tableName');
+  const rows = await allAsync(
+    'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+    [tableName]
+  );
+  if (!Array.isArray(rows)) throw new TypeError('table engine lookup must return an array');
+  if (!rows.length) {
+    throw schemaError('FINANCE_SCHEMA_TABLE_MISSING', 'finance table ' + tableName + ' does not exist');
+  }
+  const engine = String(rows[0].ENGINE ?? rows[0].Engine ?? '').toUpperCase();
+  if (engine !== 'INNODB') {
+    throw schemaError(
+      'FINANCE_SCHEMA_NON_TRANSACTIONAL_ENGINE',
+      'finance table ' + tableName + ' must use InnoDB for transactional review safety'
+    );
+  }
+  return { tableName, engine: 'InnoDB' };
+}
+
 async function ensureFinanceUniqueIndex({
   runAsync,
   allAsync,
@@ -50,6 +71,8 @@ async function ensureFinanceUniqueIndex({
   if (new Set(safeColumns).size !== safeColumns.length) {
     throw new TypeError('columns must not contain duplicate identifiers');
   }
+
+  await ensureFinanceInnoDBTable({ allAsync, tableName });
 
   const columnRows = await allAsync('SHOW COLUMNS FROM ' + tableName);
   if (!Array.isArray(columnRows)) throw new TypeError('SHOW COLUMNS must return an array');
@@ -131,4 +154,4 @@ async function ensureFinanceUniqueIndex({
   return { created: true, indexName };
 }
 
-module.exports = { ensureFinanceUniqueIndex, isExactUniqueIndex };
+module.exports = { ensureFinanceUniqueIndex, isExactUniqueIndex, ensureFinanceInnoDBTable };

@@ -17,6 +17,7 @@ const { ensureFinancialMonthCloseSchema, ensureFinancialExceptionWorkflowSchema 
 const { ensureFinancialExceptionAlertSchema } = require('./server/db/migrations/financial-exception-alerts');
 const { ensureFinancialReconciliationQueueIndex } = require('./server/db/migrations/financial-reconciliation-queue-index');
 const { ensureFinancialReconciliationAssignmentIndex } = require('./server/db/migrations/financial-reconciliation-assignment-index');
+const { ensureFinancialReconciliationCoreIndexes } = require('./server/db/migrations/financial-reconciliation-core-indexes');
 const { ensureProviderEventQueueIndexes } = require('./server/db/migrations/provider-event-queue-indexes');
 const { ensureTelegramNotificationOutboxSchema } = require('./server/db/migrations/telegram-notification-outbox');
 const { ensureTelegramCustomerBindingSchema } = require('./server/db/migrations/telegram-customer-binding');
@@ -886,6 +887,8 @@ async function initDatabase() {
         REFERENCES financial_journal_transactions(id) ON DELETE RESTRICT
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+
+  await ensureFinancialReconciliationCoreIndexes({ runAsync, allAsync });
 
   await ensureFinancialMonthCloseSchema({ runAsync, allAsync });
   await ensureFinancialExceptionWorkflowSchema({ runAsync, allAsync });

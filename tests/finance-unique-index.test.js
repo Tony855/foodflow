@@ -22,13 +22,18 @@ function fixture({
   duplicates = [],
   createError = null,
   afterRaceIndexes = [],
-  nullableColumns = []
+  nullableColumns = [],
+  engine = 'InnoDB',
+  missingTable = false
 } = {}) {
   let currentIndexes = indexes.map(row => ({ ...row }));
   const reads = [];
   const writes = [];
   const allAsync = async sql => {
     reads.push(sql);
+    if (sql.startsWith('SELECT ENGINE FROM information_schema.TABLES')) {
+      return missingTable ? [] : [{ ENGINE: engine }];
+    }
     if (sql === 'SHOW COLUMNS FROM ' + tableName) {
       return columns.map(Field => ({ Field, Null: nullableColumns.includes(Field) ? 'YES' : 'NO' }));
     }
@@ -124,6 +129,21 @@ test('rejects unsafe SQL identifiers before issuing database queries', async () 
 test('fails closed when any uniqueness-key column is nullable', async () => {
   const db = fixture({ nullableColumns: ['idempotency_key'] });
   await assert.rejects(db.run(), error => error.code === 'FINANCE_SCHEMA_NULLABLE_KEY_COLUMN');
-  assert.equal(db.reads.length, 1, 'nullable key columns are rejected before index inspection');
+  assert.equal(db.reads.length, 2, 'engine and column metadata are checked before index inspection');
+  assert.equal(db.reads.some(sql => sql.startsWith('SHOW INDEX FROM')), false);
+  assert.deepEqual(db.writes, []);
+});
+
+test('fails closed when a legacy finance table is not transactional InnoDB', async () => {
+  const db = fixture({ engine: 'MyISAM' });
+  await assert.rejects(db.run(), error => error.code === 'FINANCE_SCHEMA_NON_TRANSACTIONAL_ENGINE');
+  assert.equal(db.reads.length, 1, 'engine drift is rejected before column/index inspection');
+  assert.deepEqual(db.writes, []);
+});
+
+test('fails closed when the expected finance table is absent', async () => {
+  const db = fixture({ missingTable: true });
+  await assert.rejects(db.run(), error => error.code === 'FINANCE_SCHEMA_TABLE_MISSING');
+  assert.equal(db.reads.length, 1);
   assert.deepEqual(db.writes, []);
 });

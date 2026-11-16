@@ -12,6 +12,7 @@ const {
 const { ensureFinancialExceptionAlertSchema } = require('../server/db/migrations/financial-exception-alerts');
 const { ensureProviderEventQueueIndexes, INDEXES: PROVIDER_EVENT_QUEUE_INDEXES } = require('../server/db/migrations/provider-event-queue-indexes');
 const { ensureFinancialReconciliationAssignmentIndex } = require('../server/db/migrations/financial-reconciliation-assignment-index');
+const { ensureFinancialReconciliationCoreIndexes } = require('../server/db/migrations/financial-reconciliation-core-indexes');
 const { createProviderEventQueue } = require('../server/services/provider-event-queue');
 
 const databaseUrl = process.env.MYSQL_INTEGRATION_URL;
@@ -2970,4 +2971,143 @@ test('MySQL integration: finance unique-index migrations repair populated legacy
     ensureFinancialExceptionAlertSchema({ runAsync, allAsync }),
     error => error.code === 'FINANCE_SCHEMA_DUPLICATE_DATA'
   );
+});
+
+test('MySQL integration: core reconciliation import and review indexes repair populated legacy tables', {
+  skip: !databaseUrl ? 'MYSQL_INTEGRATION_URL is not configured' : false,
+  timeout: 30000
+}, async t => {
+  const { connection, runAsync, allAsync } = await connectTestDatabase();
+  const dropOrder = [
+    'financial_reconciliation_exception_alert_events',
+    'financial_reconciliation_exception_events',
+    'financial_reconciliation_exception_alerts',
+    'financial_reconciliation_exception_cases',
+    'financial_reconciliation_review_events',
+    'financial_reconciliation_items',
+    'financial_reconciliation_batches'
+  ];
+  const dropTables = async () => {
+    for (const table of dropOrder) await runAsync('DROP TABLE IF EXISTS ' + table);
+  };
+  await dropTables();
+  t.after(async () => {
+    try { await dropTables(); }
+    finally { await connection.end(); }
+  });
+
+  await runAsync(`CREATE TABLE financial_reconciliation_batches (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    merchant_id INT NOT NULL, store_id INT NOT NULL,
+    provider_code VARCHAR(40) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    external_batch_id VARCHAR(191) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    statement_sha256 CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    currency_code CHAR(3) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    row_count INT UNSIGNED NOT NULL, total_debit_minor BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    total_credit_minor BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    status ENUM('imported','validated','closed') NOT NULL DEFAULT 'imported',
+    imported_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    validated_at DATETIME(3) DEFAULT NULL, closed_at DATETIME(3) DEFAULT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await runAsync(`CREATE TABLE financial_reconciliation_items (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT, batch_id BIGINT NOT NULL,
+    merchant_id INT NOT NULL, store_id INT NOT NULL, row_no INT UNSIGNED NOT NULL,
+    external_reference VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+    transaction_reference VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '',
+    direction ENUM('debit','credit') NOT NULL, amount_minor BIGINT UNSIGNED NOT NULL,
+    currency_code CHAR(3) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    occurred_at DATETIME(3) NOT NULL, description VARCHAR(255) NOT NULL DEFAULT '',
+    row_sha256 CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    match_status ENUM('pending','matched','unmatched','ambiguous','exception') NOT NULL DEFAULT 'pending',
+    match_reason VARCHAR(128) DEFAULT NULL, matched_journal_transaction_id BIGINT DEFAULT NULL,
+    exception_category ENUM('refund','fee','settlement_difference','chargeback','other') DEFAULT NULL,
+    exception_note VARCHAR(500) DEFAULT NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await runAsync(`CREATE TABLE financial_reconciliation_review_events (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT, merchant_id INT NOT NULL, store_id INT NOT NULL,
+    batch_id BIGINT NOT NULL, item_id BIGINT NOT NULL, journal_transaction_id BIGINT DEFAULT NULL,
+    exception_category ENUM('refund','fee','settlement_difference','chargeback','other') DEFAULT NULL,
+    actor_admin_id INT NOT NULL, actor_username VARCHAR(100) NOT NULL,
+    action ENUM('confirm','reject','release','reassign','classify_exception') NOT NULL,
+    reason VARCHAR(500) NOT NULL,
+    idempotency_key VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    request_sha256 CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    before_json JSON NOT NULL, after_json JSON NOT NULL,
+    previous_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
+    event_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+  await runAsync(`INSERT INTO financial_reconciliation_batches
+    (merchant_id,store_id,provider_code,external_batch_id,statement_sha256,currency_code,row_count)
+    VALUES (4,9,'generic','legacy-batch-001',REPEAT('a',64),'USD',1)`);
+  await runAsync(`INSERT INTO financial_reconciliation_items
+    (batch_id,merchant_id,store_id,row_no,external_reference,direction,amount_minor,currency_code,occurred_at,row_sha256)
+    VALUES (1,4,9,1,'legacy-row-001','credit',1000,'USD','2026-11-15 10:00:00',REPEAT('b',64))`);
+  await runAsync(`INSERT INTO financial_reconciliation_review_events
+    (merchant_id,store_id,batch_id,item_id,actor_admin_id,actor_username,action,reason,idempotency_key,
+     request_sha256,before_json,after_json,event_hash)
+    VALUES (4,9,1,1,7,'finance-a','confirm','manual review','review-key-001',
+     REPEAT('c',64),'{}','{}',REPEAT('d',64))`);
+
+  await ensureFinancialReconciliationCoreIndexes({ runAsync, allAsync });
+  const expected = [
+    ['financial_reconciliation_batches','unique_reconciliation_batch',['merchant_id','store_id','provider_code','external_batch_id']],
+    ['financial_reconciliation_items','unique_reconciliation_row',['batch_id','row_no']],
+    ['financial_reconciliation_review_events','unique_finance_review_idempotency',['merchant_id','store_id','batch_id','idempotency_key']]
+  ];
+  const assertExact = async (table, name, columns) => {
+    const rows = (await allAsync('SHOW INDEX FROM ' + table))
+      .filter(row => row.Key_name === name)
+      .sort((left, right) => Number(left.Seq_in_index) - Number(right.Seq_in_index));
+    assert.equal(rows.length, columns.length);
+    assert.ok(rows.every(row => Number(row.Non_unique) === 0 && (row.Sub_part === null || row.Sub_part === undefined)));
+    assert.deepEqual(rows.map(row => row.Column_name), columns);
+  };
+  for (const [table, name, columns] of expected) await assertExact(table, name, columns);
+
+  await ensureFinancialReconciliationCoreIndexes({ runAsync, allAsync });
+  for (const table of ['financial_reconciliation_batches','financial_reconciliation_items','financial_reconciliation_review_events']) {
+    const rows = await allAsync('SELECT COUNT(*) AS row_count FROM ' + table);
+    assert.equal(Number(rows[0].row_count), 1, table + ' rows must survive migration reruns');
+  }
+
+  // Each idempotency layer must refuse to bless duplicate legacy data.
+  await runAsync('ALTER TABLE financial_reconciliation_batches DROP INDEX unique_reconciliation_batch');
+  const duplicateBatch = await runAsync(`INSERT INTO financial_reconciliation_batches
+    (merchant_id,store_id,provider_code,external_batch_id,statement_sha256,currency_code,row_count)
+    VALUES (4,9,'generic','legacy-batch-001',REPEAT('e',64),'USD',1)`);
+  await assert.rejects(ensureFinancialReconciliationCoreIndexes({ runAsync, allAsync }),
+    error => error.code === 'FINANCE_SCHEMA_DUPLICATE_DATA');
+  await runAsync('DELETE FROM financial_reconciliation_batches WHERE id=?', [duplicateBatch.insertId]);
+  await ensureFinancialReconciliationCoreIndexes({ runAsync, allAsync });
+
+  await runAsync('ALTER TABLE financial_reconciliation_items DROP INDEX unique_reconciliation_row');
+  const duplicateItem = await runAsync(`INSERT INTO financial_reconciliation_items
+    (batch_id,merchant_id,store_id,row_no,external_reference,direction,amount_minor,currency_code,occurred_at,row_sha256)
+    VALUES (1,4,9,1,'legacy-row-duplicate','credit',1000,'USD','2026-11-15 10:01:00',REPEAT('f',64))`);
+  await assert.rejects(ensureFinancialReconciliationCoreIndexes({ runAsync, allAsync }),
+    error => error.code === 'FINANCE_SCHEMA_DUPLICATE_DATA');
+  await runAsync('DELETE FROM financial_reconciliation_items WHERE id=?', [duplicateItem.insertId]);
+  await ensureFinancialReconciliationCoreIndexes({ runAsync, allAsync });
+
+  await runAsync('ALTER TABLE financial_reconciliation_review_events DROP INDEX unique_finance_review_idempotency');
+  const duplicateReview = await runAsync(`INSERT INTO financial_reconciliation_review_events
+    (merchant_id,store_id,batch_id,item_id,actor_admin_id,actor_username,action,reason,idempotency_key,
+     request_sha256,before_json,after_json,event_hash)
+    VALUES (4,9,1,1,8,'finance-b','confirm','duplicate replay','review-key-001',
+     REPEAT('1',64),'{}','{}',REPEAT('2',64))`);
+  await assert.rejects(ensureFinancialReconciliationCoreIndexes({ runAsync, allAsync }),
+    error => error.code === 'FINANCE_SCHEMA_DUPLICATE_DATA');
+  await runAsync('DELETE FROM financial_reconciliation_review_events WHERE id=?', [duplicateReview.insertId]);
+  await ensureFinancialReconciliationCoreIndexes({ runAsync, allAsync });
+
+  // Nullable idempotency keys do not provide exactly-once semantics in MySQL/MariaDB.
+  await runAsync('ALTER TABLE financial_reconciliation_review_events DROP INDEX unique_finance_review_idempotency');
+  await runAsync('ALTER TABLE financial_reconciliation_review_events MODIFY COLUMN idempotency_key VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NULL');
+  await assert.rejects(ensureFinancialReconciliationCoreIndexes({ runAsync, allAsync }),
+    error => error.code === 'FINANCE_REVIEW_EVENT_SCHEMA_NULLABILITY_DRIFT');
+  await runAsync('ALTER TABLE financial_reconciliation_review_events MODIFY COLUMN idempotency_key VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL');
+  await ensureFinancialReconciliationCoreIndexes({ runAsync, allAsync });
 });
