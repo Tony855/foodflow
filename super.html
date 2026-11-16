@@ -335,7 +335,7 @@
               <button type="button" class="btn-secondary" onclick="testTelegramBot('admin')" data-i18n="telegramTest">发送测试消息</button>
             </section>
           </div>
-          <p style="margin-top:14px;color:#999;font-size:12px;" data-i18n="telegramBotSecurityHint">请先在 Telegram 中启动 Bot 或将 Bot 添加到目标群组，再填写 Chat ID。测试消息仅在点击测试按钮时发送。</p>
+          <p style="margin-top:14px;color:#999;font-size:12px;">客户 Bot 可配置测试接收 Chat ID；管理员 Bot 只需配置全局 Token。门店业务通知的 Chat ID 由各门店自行设置，超级管理员不会接收门店业务消息。测试按钮仅验证 Bot 配置。</p>
           <div style="margin-top:18px;text-align:right;">
             <button class="btn-primary" onclick="saveTelegramBotSettings()" data-i18n="telegramSave">保存 Telegram 配置</button>
           </div>
