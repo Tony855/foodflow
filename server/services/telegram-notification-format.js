@@ -16,6 +16,7 @@ function formatTelegramBusinessNotification(event) {
   const lines = ['🏪 <b>门店</b>：' + escapeHtml(store) + ' · ' + label, '━━━━━━━━━━━━━━━━━━'];
   const tableName = safeField(event.tableName, 50);
   if (tableName) lines.push('🪑 <b>座号</b>：' + escapeHtml(tableName));
+  lines.push('🧾 <b>订单</b>：' + escapeHtml(orderNo));
   if (event.type === 'order.created') {
     const note = safeField(event.note, 200);
     if (note) lines.push('📝 <b>顾客备注</b>：\n<blockquote>' + escapeHtml(note) + '</blockquote>');
