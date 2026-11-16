@@ -29,6 +29,27 @@ test('merchant store recipient resolver requires exact active tenant, configured
   assert.deepEqual(calls[1].params, ['telegram_admin_bot_enabled', 'telegram_admin_bot_token']);
 });
 
+test('merchant store recipient resolver isolates Chat IDs between stores', async () => {
+  const lookups = [];
+  const chats = new Map([[9, '-100STORE_A'], [10, '-100STORE_B']]);
+  const resolve = createTelegramNotificationRecipientResolver({ allAsync: async (sql, params) => {
+    if (sql.includes('telegram_store_admin_recipients')) {
+      lookups.push(params);
+      return [{ chat_id: chats.get(Number(params[1])), is_enabled: 1, event_enabled: 1 }];
+    }
+    return [{ key: 'telegram_admin_bot_enabled', value: '1' }, { key: 'telegram_admin_bot_token', value: token }];
+  } });
+
+  const storeA = await resolve({ scope: 'merchant_store', key: 'store:9', merchantId: 7, storeId: 9, eventType: 'order.created' });
+  const storeB = await resolve({ scope: 'merchant_store', key: 'store:10', merchantId: 7, storeId: 10, eventType: 'order.created' });
+
+  assert.equal(storeA.chatId, '-100STORE_A');
+  assert.equal(storeB.chatId, '-100STORE_B');
+  assert.deepEqual(lookups, [[7, 9], [7, 10]]);
+  assert.equal(storeA.storeId, 9);
+  assert.equal(storeB.storeId, 10);
+});
+
 test('merchant store recipient resolver fails closed for disabled Bot or missing recipient', async () => {
   const missing = createTelegramNotificationRecipientResolver({ allAsync: async () => [] });
   const disabled = createTelegramNotificationRecipientResolver({ allAsync: async sql => sql.includes('telegram_store_admin_recipients')
