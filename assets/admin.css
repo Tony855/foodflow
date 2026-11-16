@@ -3350,3 +3350,63 @@ button.edit-btn:disabled {
   #module-financial-reconciliation .finance-review-row > div:last-child { grid-template-columns: 1fr; }
   #module-financial-reconciliation .settings-card { padding: 12px !important; }
 }
+
+
+/* FoodFlow admin visual refresh — intentionally scoped to the admin page. */
+.ff-admin {
+  --admin-line: rgba(180, 198, 220, .12);
+  --admin-surface: rgba(255, 255, 255, .055);
+  background:
+    radial-gradient(circle at 8% 0%, rgba(91, 115, 190, .18), transparent 34%),
+    radial-gradient(circle at 94% 12%, rgba(232, 93, 58, .12), transparent 30%),
+    linear-gradient(145deg, #1c2232 0%, #151b29 58%, #111827 100%);
+  color: #e8edf5;
+}
+.ff-admin .top {
+  background: rgba(19, 26, 40, .94);
+  border-bottom: 1px solid var(--admin-line);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .22);
+  backdrop-filter: blur(16px);
+}
+.ff-admin .panel,
+.ff-admin .panel.module-panel {
+  border: 1px solid var(--admin-line);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(34, 44, 63, .94), rgba(25, 34, 50, .94));
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .16);
+}
+.ff-admin .panel.module-panel h2 { letter-spacing: .1px; }
+.ff-admin .order-tabs-bar { gap: 12px; }
+.ff-admin .order-tabs-bar .order-search-input,
+.ff-admin input,
+.ff-admin select,
+.ff-admin textarea { border-color: rgba(177, 195, 218, .18); }
+.ff-admin .order-tabs-bar .order-search-input:focus,
+.ff-admin input:focus,
+.ff-admin select:focus,
+.ff-admin textarea:focus {
+  outline: none;
+  border-color: rgba(232, 125, 91, .75);
+  box-shadow: 0 0 0 3px rgba(232, 93, 58, .14);
+}
+.ff-admin .order-note {
+  margin: 10px 0 12px !important;
+  padding: 11px 13px !important;
+  border: 1px solid rgba(245, 183, 86, .24) !important;
+  border-left: 3px solid #e9ad52 !important;
+  border-radius: 12px !important;
+  background: rgba(245, 183, 86, .09) !important;
+  color: #f4d7a7 !important;
+  font-size: 13px !important;
+  line-height: 1.65 !important;
+  overflow-wrap: anywhere;
+}
+.ff-admin .order-note strong { color: #ffd28a !important; }
+.ff-admin button { transition: filter .18s ease, transform .18s ease; }
+.ff-admin button:active { transform: translateY(1px); }
+.ff-admin :focus-visible { outline: 3px solid rgba(232, 125, 91, .35); outline-offset: 2px; }
+@media (max-width: 760px) {
+  .ff-admin .panel,
+  .ff-admin .panel.module-panel { border-radius: 14px; }
+  .ff-admin .order-tabs-bar { align-items: stretch; }
+}
