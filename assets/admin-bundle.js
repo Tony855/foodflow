@@ -1331,3 +1331,1665 @@ window.deleteCashier = deleteCashier;
 
 })();
 
+
+/* ========== pages/admin/printer.js ========== */
+/*
+ * pages/admin/printer.js — 打印机管理模块
+ */
+(function(){
+'use strict';
+
+const ctx = window.SLF.admin;
+if (!ctx) return;
+
+const { $, api, tAdmin, esc, hasPermission, showConfirm, L } = ctx;
+
+async function loadPrinters() {
+  try {
+    const data = await api('/admin/printers');
+    window._adminPrinters = data;
+    const container = $('#printersList');
+    if (!data || data.length === 0) {
+      container.innerHTML = `<div style="text-align:center;padding:40px;color:#c8c8d0;">${tAdmin('noPrinterHint')}</div>`;
+      return;
+    }
+    const typeMap = { network: tAdmin('networkPrinter'), usb: 'USB', bluetooth: tAdmin('bluetoothPrinter') };
+    container.innerHTML = data.map(p => `
+        <div class="admin-card">
+            <div class="info">
+                <div class="title">🖨️ ${esc(p.name)} ${p.is_default ? `<span style="background:#ffd93d;color:#333;padding:2px 10px;border-radius:10px;font-size:12px;margin-left:8px;font-weight:600;">${tAdmin('defaultPrinter')}</span>` : ''} ${p.store_name ? `<span style="background:rgba(52,152,219,.15);color:#5dade2;padding:2px 10px;border-radius:10px;font-size:12px;margin-left:8px;font-weight:600;">🏪 ${esc(p.store_name)}</span>` : ''}</div>
+                <div class="sub">${typeMap[p.type] || esc(p.type)} · ${esc(p.brand)} · ${esc(p.paper_width)}mm${p.ip_address ? ' · ' + esc(p.ip_address) + ':' + esc(p.port) : ''}</div>
+            </div>
+            <div class="printer-controls">
+                <label class="printer-switch-label">
+                    <span class="printer-switch-text ${p.active ? 'on' : 'off'}">${p.active ? tAdmin('enabled') : tAdmin('disabled')}</span>
+                    <label class="store-switch">
+                        <input type="checkbox" ${p.active ? 'checked' : ''} onchange="togglePrinter(${p.id}, this.checked ? 1 : 0)">
+                        <span class="store-switch-slider"></span>
+                    </label>
+                </label>
+                <div class="actions">
+                    ${hasPermission('can_manage_printer') ? '<button class="copy" onclick="testPrinter(' + p.id + ')">' + tAdmin('testPrint') + '</button>' : ''}
+                    <button class="edit-btn" onclick="openPrinterEdit(${p.id})">${L('edit')}</button>
+                    ${!p.is_default ? `<button onclick="setDefaultPrinter(${p.id})">${tAdmin('setDefaultPrinter')}</button>` : ''}
+                    ${hasPermission('can_manage_printer') ? '<button class="danger" onclick="deletePrinter(' + p.id + ')">' + L('delete') + '</button>' : ''}
+                </div>
+            </div>
+        </div>
+    `).join('');
+  } catch (err) { SLF.ui.toast(`${tAdmin('loadPrinterFailed')}: ` + err.message); }
+}
+
+async function addPrinter() {
+  const name = $('#printerName').value.trim();
+  if (!name) { SLF.ui.toast(tAdmin('printerNameRequired')); return; }
+  try {
+    await api('/admin/printers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: {
+      name, type: $('#printerType').value, ip_address: $('#printerIp').value.trim(),
+      port: parseInt($('#printerPort').value) || 9100, paper_width: parseInt($('#printerWidth').value) || 58,
+      brand: $('#printerBrand').value, is_default: $('#printerDefault').checked
+    }});
+    SLF.ui.toast(tAdmin('printerAdded'));
+    $('#printerName').value = '';
+    $('#printerIp').value = '';
+    $('#printerDefault').checked = false;
+    loadPrinters();
+  } catch (err) { SLF.ui.toast(tAdmin('addFailed') + ': ' + err.message); }
+}
+
+async function testPrinter(id) {
+  try {
+    await api('/admin/printers/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: { printer_id: id } });
+    SLF.ui.toast(tAdmin('testPrintSent'));
+  } catch (err) { SLF.ui.toast(tAdmin('printFailed') + ': ' + err.message); }
+}
+
+function openPrinterEdit(id) {
+  const printers = window._adminPrinters || [];
+  const p = printers.find(x => String(x.id) === String(id));
+  if (!p) return;
+  $('#editPrinterId').value = p.id;
+  $('#editPrinterName').value = p.name || '';
+  $('#editPrinterType').value = p.type || 'network';
+  $('#editPrinterIp').value = p.ip_address || '';
+  $('#editPrinterPort').value = p.port || 9100;
+  $('#editPrinterWidth').value = p.paper_width || 58;
+  $('#editPrinterBrand').value = p.brand || 'generic';
+  $('#editPrinterDefault').checked = !!p.is_default;
+  $('#printerEditModal').classList.add('open');
+}
+
+function closePrinterEdit() { $('#printerEditModal').classList.remove('open'); }
+
+async function savePrinterEdit() {
+  const id = parseInt($('#editPrinterId').value);
+  const name = $('#editPrinterName').value.trim();
+  if (!name) { SLF.ui.toast(tAdmin('printerNameRequired')); return; }
+  try {
+    await api('/admin/printers/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: {
+      name, type: $('#editPrinterType').value, ip_address: $('#editPrinterIp').value.trim(),
+      port: parseInt($('#editPrinterPort').value) || 9100, paper_width: parseInt($('#editPrinterWidth').value) || 58,
+      brand: $('#editPrinterBrand').value, is_default: $('#editPrinterDefault').checked
+    }});
+    SLF.ui.toast(tAdmin('saveSuccess') || '保存成功');
+    closePrinterEdit();
+    loadPrinters();
+  } catch (err) { SLF.ui.toast(tAdmin('saveFailed') + ': ' + err.message); }
+}
+
+async function togglePrinter(id, active) {
+  try {
+    await api('/admin/printers/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: { active } });
+    loadPrinters();
+  } catch (err) { SLF.ui.toast(tAdmin('operationFailed') + ': ' + err.message); }
+}
+
+async function setDefaultPrinter(id) {
+  try {
+    await api('/admin/printers/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: { is_default: true } });
+    SLF.ui.toast(tAdmin('setAsDefaultPrinter'));
+    loadPrinters();
+  } catch (err) { SLF.ui.toast(tAdmin('operationFailed') + ': ' + err.message); }
+}
+
+function deletePrinter(id) {
+  showConfirm(tAdmin('confirmDeletePrinter'), async function() {
+    try {
+      await api('/admin/printers/' + id, { method: 'DELETE' });
+      SLF.ui.toast(tAdmin('printerDeleted'));
+      loadPrinters();
+    } catch (err) { SLF.ui.toast(`${tAdmin('deleteFailed')}: ` + err.message); }
+  });
+}
+
+async function printOrder(orderId) {
+  try {
+    const data = await api('/orders/' + orderId + '/print', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: {} });
+    if (data.printed) SLF.ui.toast(tAdmin('orderPrinted'));
+    else if (data.printData) {
+      // 从缓存找订单，用于展示订单号
+      const list = ctx.ordersCache ? ctx.ordersCache() : [];
+      const ord = list.find(o => String(o.id) === String(orderId)) || {};
+      ord._store = data.store || null;
+      SLF.ui.toast(tAdmin('openingBrowserPrint'));
+      printViaBrowser(data.printData, ord);
+    }
+  } catch (err) { SLF.ui.toast(tAdmin('printFailed') + ': ' + err.message); }
+}
+
+function printViaBrowser(base64Data, orderOrId) {
+  const order = (typeof orderOrId === 'object' && orderOrId) ? orderOrId : {};
+  const orderNo = order.order_no || (order.id ? ('#' + order.id) : '#?');
+  const tableNo = order.table_name || order.table || '-';
+  const items = Array.isArray(order.items) ? order.items : [];
+  const note = order.note || '';
+  const total = Number(order.total) || 0;
+
+  // 时间格式化
+  let timeStr = '';
+  try {
+    const d = order.createdAt ? new Date(order.createdAt) : new Date();
+    const pad = n => String(n).padStart(2, '0');
+    timeStr = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  } catch (e) {}
+
+  // 货币格式化（主币）
+  const fmt = v => {
+    try { return SLF.money.primary(v); } catch (e) { return '$' + Number(v || 0).toFixed(2); }
+  };
+  const baseOf = (item) => {
+    try { return SLF.money.toBase(item.price, item.currency_code); } catch (e) { return Number(item.price) || 0; }
+  };
+
+  // 菜品行
+  let itemsHtml = '';
+  items.forEach(item => {
+    const qty = Number(item.quantity) || 0;
+    const ret = Number(item.returnedQty) || 0;
+    const realQty = qty - ret;
+    const unitBase = baseOf(item);
+    const lineBase = unitBase * realQty;
+    const name = (item.name || '').slice(0, 20);
+    const retTag = ret > 0 ? ' <span style="color:#e74c3c;">(退' + ret + ')</span>' : '';
+    itemsHtml +=
+      '<div class="row">' +
+        '<span class="item-name">' + esc(name) + ' ×' + qty + retTag + '</span>' +
+        '<span class="item-amt">' + fmt(lineBase) + '</span>' +
+      '</div>';
+  });
+
+  // 备注
+  const noteHtml = note ? '<div class="separator"></div><div class="note">' + esc(tAdmin('orderNoteDisplay')) + ': ' + esc(note) + '</div>' : '';
+
+  // 支付方式（可选）
+  const payLabel = {
+    cash: 'Cash', wechat: 'WeChat', alipay: 'Alipay',
+    card: 'Card', aba: 'ABA',
+  }[order.pay_method] || '';
+  const payHtml = payLabel ? '<div class="row"><span>' + tAdmin('cashier') + '</span><span>' + payLabel + '</span></div>' : '';
+
+  // 店铺名（优先），无则用品牌名
+  const storeName = (order._store && order._store.name) ? order._store.name : (tAdmin('brandName') || 'FoodFlow');
+  const storeAddr = (order._store && order._store.address) ? order._store.address : '';
+  const storePhone = (order._store && order._store.phone) ? order._store.phone : '';
+
+  const html =
+    '<html><head><meta charset="UTF-8"><title>' + esc(orderNo) + '</title>' +
+    '<style>' +
+    '*{box-sizing:border-box}' +
+    'body{font-family:"Courier New",monospace;font-size:13px;padding:10px;width:300px;margin:0 auto;color:#000;}' +
+    '.center{text-align:center;}' +
+    '.big{font-size:18px;font-weight:bold;}' +
+    '.sub{font-size:12px;color:#555;}' +
+    '.separator{border-top:1px dashed #000;margin:8px 0;}' +
+    '.row{display:flex;justify-content:space-between;padding:2px 0;align-items:baseline;}' +
+    '.item-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;}' +
+    '.item-amt{white-space:nowrap;font-weight:bold;}' +
+    '.total{font-size:16px;font-weight:bold;padding-top:6px;}' +
+    '.note{font-size:12px;padding:4px 0;line-height:1.4;}' +
+    '.footer{text-align:center;font-size:12px;color:#555;padding-top:8px;}' +
+    '</style></head><body onload="window.print();setTimeout(function(){window.close()},800);">' +
+      '<div class="center big">' + esc(storeName) + '</div>' +
+      (storeAddr ? '<div class="center sub">' + esc(storeAddr) + '</div>' : '') +
+      (storePhone ? '<div class="center sub">' + esc(storePhone) + '</div>' : '') +
+      '<div class="center sub">' + esc(tAdmin('table') || 'Table') + ': ' + esc(tableNo) + '</div>' +
+      '<div class="center sub">' + esc(tAdmin('order') || 'Order') + ': ' + esc(orderNo) + '</div>' +
+      (timeStr ? '<div class="center sub">' + timeStr + '</div>' : '') +
+      '<div class="separator"></div>' +
+      itemsHtml +
+      noteHtml +
+      '<div class="separator"></div>' +
+      '<div class="row total"><span>' + (tAdmin('total') || 'Total') + '</span><span>' + fmt(total) + '</span></div>' +
+      (payHtml ? '<div class="separator"></div>' + payHtml : '') +
+      '<div class="footer">' + esc(tAdmin('printerConnectHint') || '') + '</div>' +
+    '</body></html>';
+
+  const printWindow = window.open('', '_blank', 'width=320,height=600');
+  if (!printWindow) { SLF.ui.toast(tAdmin('allowPopupToPrint')); return; }
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
+
+document.addEventListener('DOMContentLoaded', async function() {
+  // ===== 后厨单开关 =====
+  const toggle = document.getElementById('autoPrintToggle');
+  if (toggle) {
+    try {
+      const data = await SLF.api.get('/admin/settings/auto-print?type=kitchen');
+      toggle.checked = !!(data && data.enabled);
+    } catch (e) {
+      console.warn('读取后厨自动打印开关失败', e);
+      toggle.checked = false;
+    }
+  }
+
+  // ===== 收银小票开关 =====
+  const toggleReceipt = document.getElementById('autoPrintReceiptToggle');
+  if (toggleReceipt) {
+    try {
+      const data = await SLF.api.get('/admin/settings/auto-print?type=receipt');
+      toggleReceipt.checked = !!(data && data.enabled);
+    } catch (e) {
+      console.warn('读取收银自动打印开关失败', e);
+      toggleReceipt.checked = false;
+    }
+  }
+});
+
+// 挂到 window
+window.printOrder = printOrder;
+window.printViaBrowser = printViaBrowser;
+window.loadPrinters = loadPrinters;
+window.addPrinter = addPrinter;
+window.testPrinter = testPrinter;
+window.openPrinterEdit = openPrinterEdit;
+window.closePrinterEdit = closePrinterEdit;
+window.savePrinterEdit = savePrinterEdit;
+window.togglePrinter = togglePrinter;
+window.setDefaultPrinter = setDefaultPrinter;
+window.deletePrinter = deletePrinter;
+
+})();
+
+
+/* ========== pages/admin/khqr.js ========== */
+/*
+ * pages/admin/khqr.js — KHQR 收款码配置（多码列表版，按店铺隔离）
+ */
+(function(){
+'use strict';
+
+const ctx = window.SLF.admin;
+if (!ctx) return;
+const { api } = ctx;
+
+const esc = SLF.utils.esc;
+const tAdmin = (window.SLF && window.SLF.t) ? window.SLF.t : function(k){ return k; };
+
+function getCurrentStoreName() {
+  const sel = document.getElementById('adminStoreSelect');
+  if (sel && sel.selectedIndex >= 0) return sel.options[sel.selectedIndex].text;
+  return tAdmin('currentStoreFallback');
+}
+
+function updateCurrentStoreName() {
+  const el = document.getElementById('khqrCurrentStoreName');
+  if (el) el.textContent = getCurrentStoreName();
+}
+
+/* ---------- 渲染 provider 列表 ---------- */
+function renderProviderList(providers) {
+  const el = document.getElementById('khqrProviderList');
+  if (!el) return;
+
+  if (!providers || providers.length === 0) {
+    el.innerHTML =
+      '<div style="padding:14px 16px;background:rgba(255,193,7,.08);border:1px solid rgba(255,193,7,.25);border-radius:10px;color:#ffd93d;font-size:13px;">' +
+        tAdmin('noKhqrConfigured') +
+      '</div>';
+    return;
+  }
+
+  el.innerHTML = providers.map(p => {
+    const badgeDisabled = !p.enabled
+      ? '<span style="display:inline-block;background:#777;color:#fff;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:700;margin-left:6px;">' + tAdmin('disabledBadge') + '</span>'
+      : '';
+    const bg = p.enabled ? 'rgba(46,204,113,.06)' : 'rgba(255,255,255,.03)';
+    const border = p.enabled ? 'rgba(46,204,113,.2)' : 'rgba(255,255,255,.08)';
+
+    return `<div style="padding:8px 12px;background:${bg};border:1px solid ${border};border-radius:8px;margin-bottom:6px;display:flex;align-items:center;gap:10px;">
+      <div class="khqr-icon-wrap" data-bank="${esc(p.bank || '')}" style="width:36px;height:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;font-size:18px;overflow:hidden;">📱</div>
+      <div style="flex:1;min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+        <span style="color:#fff;font-weight:600;font-size:13px;">${esc(p.label)}</span>
+        ${badgeDisabled}
+        <span style="color:#888;font-size:11px;">${esc(p.bank || '')} · ${esc(p.currency || '')} · ${esc(p.merchantName || '')}</span>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <button data-action="toggle" data-id="${esc(p.id)}" style="padding:4px 10px;border:0;border-radius:6px;background:rgba(255,193,7,.15);color:#ffd93d;font-size:11px;font-weight:600;cursor:pointer;">${p.enabled ? tAdmin('disabled') : tAdmin('enabled')}</button>
+        <button data-action="delete" data-id="${esc(p.id)}" style="padding:4px 10px;border:0;border-radius:6px;background:rgba(231,76,60,.15);color:#e74c3c;font-size:11px;font-weight:600;cursor:pointer;">${tAdmin('delete')}</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // 绑定按钮
+  el.querySelectorAll('button[data-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      if (action === 'toggle') toggleProvider(id);
+      else if (action === 'delete') deleteProvider(id);
+    });
+  });
+
+  // 加载银行图标
+  const _BANK_ICON_MAP = { 'ABA': 'aba', 'ACLEDA': 'acleda', 'Bakong': 'KHQR', 'Wing': 'Wing' };
+  const _ICON_EXTS = ['png', 'jpg', 'jpeg', 'webp'];
+  el.querySelectorAll('.khqr-icon-wrap').forEach(wrap => {
+    const bank = wrap.dataset.bank || '';
+    const key = _BANK_ICON_MAP[bank] || bank.toLowerCase().replace(/[^a-z0-9]/g, '');
+    let _i = 0;
+    function tryNext() {
+      if (_i >= _ICON_EXTS.length) {
+        const fallbackUrl = '/assets/vendor/payment-icons/KHQR.png';
+        const fallback = new Image();
+        fallback.onload = function() { wrap.innerHTML = '<img src="' + fallbackUrl + '" style="max-width:100%;max-height:100%;object-fit:contain;" alt="">'; };
+        fallback.src = fallbackUrl;
+        return;
+      }
+      const url = '/assets/vendor/payment-icons/' + key + '.' + _ICON_EXTS[_i++];
+      const img = new Image();
+      img.onload = function() { wrap.innerHTML = '<img src="' + url + '" style="max-width:100%;max-height:100%;object-fit:contain;" alt="">'; };
+      img.onerror = tryNext;
+      img.src = url;
+    }
+    tryNext();
+  });
+}
+
+/* ---------- 加载 provider 列表 ---------- */
+async function loadKhqrInfo() {
+  const card = document.getElementById('khqrSettingsCard');
+  if (!card) return;
+  updateCurrentStoreName();
+
+  const sel = document.getElementById('adminStoreSelect');
+  if (!sel || !sel.value) {
+    renderProviderList([]);
+    return;
+  }
+
+  try {
+    const res = await api('/admin/khqr/providers');
+    renderProviderList(res.providers || []);
+  } catch (e) {
+    console.warn('[khqr] 加载失败:', e.message);
+    const el = document.getElementById('khqrProviderList');
+    if (el) el.innerHTML =
+      '<div style="padding:12px 16px;background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.3);border-radius:10px;color:#e74c3c;font-size:14px;">⚠️ ' + esc(e.message) + '</div>';
+  }
+}
+
+/* ---------- 上传新码 ---------- */
+async function uploadKhqrImage(file) {
+  const fd = new FormData();
+  fd.append('image', file);
+  const label = (document.getElementById('khqrUploadLabel') || {}).value || '';
+  fd.append('label', label.trim());
+
+  const token = SLF.store.rawGetSession('adminToken') || '';
+  const storeId = SLF.store.rawGetSession('adminStoreId') || SLF.store.rawGet('storeId') || '';
+  if (!storeId) throw new Error(tAdmin('selectStoreFirst'));
+
+  const res = await fetch('/api/admin/khqr/upload', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token, 'X-Store-Id': String(storeId) },
+    body: fd,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
+}
+
+/* ---------- 删除 / 设默认 / 切换 ---------- */
+async function deleteProvider(id) {
+  if (!confirm(tAdmin('confirmDeleteKhqr'))) return;
+  try {
+    await api('/admin/khqr/providers/' + id, { method: 'DELETE' });
+    SLF.ui && SLF.ui.toast ? SLF.ui.toast('✅ ' + tAdmin('deleted')) : 0;
+    await loadKhqrInfo();
+  } catch (e) {
+    SLF.ui && SLF.ui.toast ? SLF.ui.toast('❌ ' + e.message) : alert(e.message);
+  }
+}
+
+async function setDefaultProvider(id) {
+  try {
+    await api('/admin/khqr/providers/' + id + '/default', { method: 'POST' });
+    SLF.ui && SLF.ui.toast ? SLF.ui.toast(tAdmin('setAsDefaultDone')) : 0;
+    await loadKhqrInfo();
+  } catch (e) {
+    SLF.ui && SLF.ui.toast ? SLF.ui.toast('❌ ' + e.message) : alert(e.message);
+  }
+}
+
+async function toggleProvider(id) {
+  try {
+    await api('/admin/khqr/providers/' + id + '/toggle', { method: 'POST' });
+    await loadKhqrInfo();
+  } catch (e) {
+    SLF.ui && SLF.ui.toast ? SLF.ui.toast('❌ ' + e.message) : alert(e.message);
+  }
+}
+
+/* ---------- 绑定事件 ---------- */
+function bindEvents() {
+  const btn = document.getElementById('khqrUploadBtn');
+  const input = document.getElementById('khqrImageFile');
+  const nameEl = document.getElementById('khqrUploadName');
+  if (!btn || !input || btn.dataset.bound === '1') return;
+  btn.dataset.bound = '1';
+
+  btn.addEventListener('click', () => input.click());
+
+  input.addEventListener('change', async function() {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    if (nameEl) nameEl.textContent = file.name;
+    btn.disabled = true;
+    btn.textContent = tAdmin('parsing');
+    try {
+      const data = await uploadKhqrImage(file);
+      SLF.ui && SLF.ui.toast ? SLF.ui.toast(tAdmin('addedColon') + (data.provider && data.provider.label || '')) : 0;
+      // 清空输入
+      const labelEl = document.getElementById('khqrUploadLabel');
+      if (labelEl) labelEl.value = '';
+      await loadKhqrInfo();
+    } catch (e) {
+      SLF.ui && SLF.ui.toast ? SLF.ui.toast('❌ ' + e.message) : alert(e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = tAdmin('chooseImageUpload');
+      input.value = '';
+      if (nameEl) nameEl.textContent = tAdmin('noFileSelected');
+    }
+  });
+}
+
+function init() {
+  if (!document.getElementById('khqrSettingsCard')) return;
+  bindEvents();
+  loadKhqrInfo();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+
+document.addEventListener('change', function(e) {
+  if (e.target && e.target.id === 'adminStoreSelect') {
+    setTimeout(() => { updateCurrentStoreName(); loadKhqrInfo(); }, 200);
+  }
+});
+
+document.addEventListener('click', function(e) {
+  const nav = e.target && e.target.closest && e.target.closest('.nav-item');
+  if (nav && nav.dataset && nav.dataset.module === 'password') {
+    setTimeout(() => { updateCurrentStoreName(); loadKhqrInfo(); }, 100);
+  }
+}, true);
+
+window.loadKhqrInfo = loadKhqrInfo;
+
+})();
+
+// 语言切换时重新渲染 KHQR 收款码列表
+if (window.SLF && window.SLF.i18n && typeof window.SLF.i18n.onChange === 'function') {
+  window.SLF.i18n.onChange(function () {
+    if (window.loadKhqrInfo) setTimeout(function () { window.loadKhqrInfo(); }, 50);
+  });
+}
+
+
+/* ========== pages/admin/report.js ========== */
+/*
+ * pages/admin/report.js — 报表 + 呼叫服务员模块
+ */
+(function(){
+'use strict';
+
+const ctx = window.SLF.admin;
+if (!ctx) return;
+
+const { $, api, tAdmin, esc } = ctx;
+
+// 格式化时间桶：把完整 ISO 时间戳压缩成人类可读的短字符串
+function fmtTimeBucket(tb) {
+  if (!tb) return '';
+  const s = String(tb);
+  // 完整 ISO（含 T）：只保留日期部分 YYYY-MM-DD
+  if (s.includes('T')) return s.slice(0, 10);
+  // YYYY-MM-DDTHH:mm 格式被截断成 HH:mm
+  // 已经是 YYYY-MM / YYYY-MM-DD / HH:mm 等短格式，直接返回
+  return s;
+}
+
+async function loadWaiterCalls() {
+  try {
+    const data = await api('/waiter-calls');
+    const container = $('#waiterCallsList');
+    if (!data || data.length === 0) {
+      container.innerHTML = `<div style="text-align:center;padding:40px;color:#c8c8d0;">${tAdmin('noCalls')}</div>`;
+      return;
+    }
+    container.innerHTML = data.map(c => {
+      const isUrge = c.type === 'urge';
+      const icon = isUrge ? '⚡' : '🔔';
+      const label = isUrge ? (tAdmin('urgeOrder') || '催单') : (tAdmin('callWaiter') || '呼叫');
+      const bg = isUrge ? 'rgba(231,76,60,.12)' : 'rgba(255,176,32,.1)';
+      const border = isUrge ? 'rgba(231,76,60,.35)' : 'rgba(255,176,32,.3)';
+      const btnBg = isUrge ? '#e74c3c' : '#ff7a45';
+      return `
+        <div style="background:${bg};border:1px solid ${border};border-radius:12px;padding:14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+            <div>
+                <div style="font-weight:700;font-size:16px;color:#fff;">${icon} ${tAdmin('table')} ${esc(c.table_name)} ${label}</div>
+                <div style="color:#b8b8c8;font-size:13px;margin-top:4px;">${esc(c.created_at)}${c.message ? ' · ' + esc(c.message) : ''}</div>
+            </div>
+            <button data-call-id="${esc(c.id)}" onclick="handleWaiterCall(this.dataset.callId)" style="background:${btnBg};color:#fff;border:0;padding:8px 18px;border-radius:8px;cursor:pointer;font-weight:600;">${tAdmin('handled')}</button>
+        </div>
+    `;
+    }).join('');
+  } catch (err) {
+    SLF.ui.toast(`${tAdmin('loadCallsFailed')}: ` + err.message);
+  }
+}
+
+async function handleWaiterCall(id) {
+  try {
+    await api('/waiter-calls/' + id + '/handle', { method: 'PUT' });
+    SLF.ui.toast(tAdmin('handled'));
+    loadWaiterCalls();
+  } catch (err) {
+    SLF.ui.toast(tAdmin('handleFailed') + ': ' + err.message);
+  }
+}
+
+async function loadDailyReport(rangeStart, rangeEnd) {
+  // 若传入了范围参数，直接用；否则读取日期输入框（单日查询）
+  let startDate, endDate;
+  if (rangeStart && rangeEnd) {
+    startDate = rangeStart;
+    endDate = rangeEnd;
+  } else {
+    const _now = new Date();
+    const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
+    const dateInput = ($('#reportDate') && $('#reportDate').value) || _todayStr;
+    startDate = endDate = dateInput;
+  }
+  try {
+    const scope = ($('#reportScopeSelect') && $('#reportScopeSelect').value) || 'current';
+    const data = await api(`/admin/reports/daily?startDate=${startDate}&endDate=${endDate}&scope=${scope}`);
+    const s = data.summary;
+    const container = $('#reportContent');
+    let html = '';
+
+    // scope=all：先渲染分店对比表
+    if (data.scope === 'all' && Array.isArray(data.storeBreakdown) && data.storeBreakdown.length > 0) {
+      const _h = (s) => '<' + 'th style="padding:10px 14px;text-align:right;color:#ffd93d;font-size:13px;font-weight:700;">' + s + '</th>';
+      html += '<h3 style="margin:0 0 10px;color:#fff;font-size:15px;font-weight:700;">🏬 ' + (tAdmin('reportByStore') || '各店铺对比') + '</h3>';
+      html += '<div style="overflow-x:auto;margin-bottom:24px;"><table style="width:100%;border-collapse:collapse;background:rgba(255,255,255,.04);border-radius:12px;overflow:hidden;">';
+      html += '<thead><tr style="background:rgba(255,255,255,.06);">' +
+              '<th style="padding:10px 14px;text-align:left;color:#ffd93d;font-size:13px;font-weight:700;">' + (tAdmin('storeLabel') || '店铺') + '</th>' +
+              _h(tAdmin('totalOrders') || '订单总数') +
+              _h(tAdmin('completed') || '已完成') +
+              _h(tAdmin('canceled') || '已取消') +
+              _h(tAdmin('totalRevenue') || '总营业额') +
+              '</tr></thead><tbody>';
+      data.storeBreakdown.forEach((st, i) => {
+        const bg = i % 2 === 0 ? 'rgba(255,255,255,.02)' : 'transparent';
+        html += '<tr style="background:' + bg + ';border-top:1px solid rgba(255,255,255,.06);">' +
+                '<td style="padding:10px 14px;color:#fff;font-size:14px;font-weight:600;">' + esc(st.store_name || ('#' + st.store_id)) + '</td>' +
+                '<td style="padding:10px 14px;color:#fff;font-size:14px;text-align:right;">' + (st.orders || 0) + '</td>' +
+                '<td style="padding:10px 14px;color:#2ecc71;font-size:14px;text-align:right;">' + (st.completed_orders || 0) + '</td>' +
+                '<td style="padding:10px 14px;color:#e74c3c;font-size:14px;text-align:right;">' + (st.canceled_orders || 0) + '</td>' +
+                '<td style="padding:10px 14px;color:#ffd93d;font-size:14px;font-weight:700;text-align:right;">$' + Number(st.revenue || 0).toFixed(2) + '</td>' +
+                '</tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+
+    html += `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;">
+            <div style="background:rgba(255,255,255,.05);border-radius:12px;padding:16px;text-align:center;">
+                <div style="font-size:28px;font-weight:700;color:#e85d3a;">${s.totalOrders}</div>
+                <div style="color:#c8c8d0;font-size:13px;margin-top:4px;">${tAdmin('totalOrders')}</div>
+            </div>
+            <div style="background:rgba(255,255,255,.05);border-radius:12px;padding:16px;text-align:center;">
+                <div style="font-size:28px;font-weight:700;color:#2ecc71;">${s.completedOrders}</div>
+                <div style="color:#c8c8d0;font-size:13px;margin-top:4px;">${tAdmin('completed')}</div>
+            </div>
+            <div style="background:rgba(255,255,255,.05);border-radius:12px;padding:16px;text-align:center;">
+                <div style="font-size:28px;font-weight:700;color:#e74c3c;">${s.canceledOrders}</div>
+                <div style="color:#c8c8d0;font-size:13px;margin-top:4px;">${tAdmin('canceled')}</div>
+            </div>
+            <div style="background:rgba(255,255,255,.05);border-radius:12px;padding:16px;text-align:center;">
+                <div style="font-size:28px;font-weight:700;color:#f1c40f;">$${Number(s.totalRevenue).toFixed(2)}</div>
+                <div style="color:#c8c8d0;font-size:13px;margin-top:4px;">${tAdmin('totalRevenue')}</div>
+            </div>
+            <div style="background:rgba(255,255,255,.05);border-radius:12px;padding:16px;text-align:center;">
+                <div style="font-size:28px;font-weight:700;color:#3498db;">$${Number(s.avgOrderValue).toFixed(2)}</div>
+                <div style="color:#c8c8d0;font-size:13px;margin-top:4px;">${tAdmin('avgOrderValue')}</div>
+            </div>
+        </div>
+    `;
+    if (data.hourlyStats && data.hourlyStats.length > 0) {
+      // 根据粒度显示不同的标题
+      const granLabel = data.granularity === 'year' ? '📅' : data.granularity === 'month' ? '📆' : '⏰';
+      html += `<h3 style="margin:20px 0 10px;color:#fff;font-size:15px;font-weight:700;">${granLabel} ${tAdmin('hourlyDistribution')} <span style="font-size:12px;color:#888;font-weight:400;">(${data.date})</span></h3><div style="background:rgba(255,255,255,.05);border-radius:12px;padding:14px;">`;
+      const maxOrders = Math.max(...data.hourlyStats.map(h => h.orders), 1);
+      for (const h of data.hourlyStats) {
+        const pct = (h.orders / maxOrders * 100).toFixed(0);
+        html += `<div style="display:flex;align-items:center;gap:10px;margin:6px 0;"><span style="width:88px;color:#c8c8d0;font-size:13px;text-align:right;">${fmtTimeBucket(h.time_bucket)}</span><div style="flex:1;background:rgba(255,255,255,.1);border-radius:6px;height:20px;overflow:hidden;"><div style="width:${pct}%;background:linear-gradient(90deg,#e85d3a,#f39c12);height:100%;border-radius:6px;"></div></div><span style="width:70px;text-align:right;font-size:13px;color:#fff;font-weight:600;">${h.orders}${tAdmin('orderUnit')} $${Number(h.revenue).toFixed(0)}</span></div>`;
+      }
+      html += `</div>`;
+    }
+    if (data.tableRevenue && data.tableRevenue.length > 0) {
+      html += `<h3 style="margin:20px 0 10px;color:#fff;font-size:15px;font-weight:700;">🏪 ${tAdmin('revenueByTable')}</h3><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px;">`;
+      for (const t of data.tableRevenue) {
+        html += `<div style="background:linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.03));border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;text-align:center;"><div style="font-weight:700;color:#fff;font-size:15px;">${esc(t.table_name)}</div><div style="color:#2ecc71;font-size:20px;font-weight:700;margin-top:6px;">$${Number(t.revenue).toFixed(2)}</div><div style="color:#c8c8d0;font-size:12px;margin-top:2px;">${t.orders} ${tAdmin('orderUnit')}</div></div>`;
+      }
+      html += `</div>`;
+    }
+    if (data.dishRanking && data.dishRanking.length > 0) {
+      html += `<h3 style="margin:20px 0 10px;color:#fff;font-size:15px;font-weight:700;">🔥 ${tAdmin('topDishes')}</h3><div style="background:rgba(255,255,255,.05);border-radius:12px;padding:14px;margin-bottom:20px;">`;
+      data.dishRanking.forEach((d, i) => {
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+        html += `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06);align-items:center;"><span style="color:#fff;font-weight:600;font-size:14px;">${medal} ${esc(d.emoji || '')} ${esc(d.name)}</span><span style="font-weight:700;color:#ffd93d;font-size:14px;">${d.quantity || 0} ${tAdmin('portion')}</span></div>`;
+      });
+      html += `</div>`;
+    }
+    container.innerHTML = html;
+  } catch (err) { SLF.ui.toast(`${tAdmin('loadReportFailed')}: ` + err.message); }
+}
+
+function exportData(type) {
+  const adminTokenLocal = SLF.store.rawGetSession('adminToken') || '';
+  const url = '/api/admin/export/' + type;
+  fetch(url, { headers: { 'Authorization': 'Bearer ' + adminTokenLocal } })
+    .then(res => {
+      if (!res.ok) throw new Error(tAdmin('exportFailed'));
+      return res.blob();
+    })
+    .then(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = type + '_' + new Date().toISOString().slice(0, 10) + '.csv';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      SLF.ui.toast(tAdmin('exportSuccess'));
+    })
+    .catch(err => SLF.ui.toast(tAdmin('exportFailed') + ': ' + err.message));
+}
+
+// 挂到 window
+window.loadWaiterCalls = loadWaiterCalls;
+window.handleWaiterCall = handleWaiterCall;
+window.loadDailyReport = loadDailyReport;
+window.exportData = exportData;
+
+
+// ===== 2026-09-29 快捷日期范围 =====
+(function initQuickRange() {
+  // 本地时间格式化（避免 toISOString 的 UTC 偏移问题）
+  const fmtLocal = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const applyRange = (type) => {
+    const today = new Date();
+    const y = today.getFullYear(), m = today.getMonth(), d = today.getDate();
+    let start, end;
+    if (type === 'today') {
+      start = end = fmtLocal(new Date(y, m, d));
+    } else if (type === 'week') {
+      const mon = new Date(y, m, d - ((today.getDay() + 6) % 7));
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+      start = fmtLocal(mon); end = fmtLocal(sun);
+    } else if (type === 'month') {
+      start = fmtLocal(new Date(y, m, 1));
+      end = fmtLocal(new Date(y, m + 1, 0));
+    } else if (type === 'year') {
+      start = fmtLocal(new Date(y, 0, 1));
+      end = fmtLocal(new Date(y, 11, 31));
+    }
+    // 更新日期输入框为起始日
+    const dateEl = document.getElementById('reportDate');
+    if (dateEl) dateEl.value = start;
+    if (typeof loadDailyReport === 'function') loadDailyReport(start, end);
+  };
+
+  const initUI = () => {
+    // 默认值（用本地日期）
+    const dateEl = document.getElementById('reportDate');
+    if (dateEl && !dateEl.value) dateEl.value = fmtLocal(new Date());
+
+    // 快捷按钮
+    document.querySelectorAll('[data-range]').forEach(btn => {
+      btn.onclick = () => applyRange(btn.dataset.range);
+    });
+
+    // 语言切换后刷新标签
+    if (SLF.i18n && typeof SLF.i18n.onChange === 'function') {
+      SLF.i18n.onChange(() => applyReportLabels());
+    }
+    applyReportLabels();
+  };
+
+  // 立即执行（无论 DOM 是否已就绪，因为本模块可能在 DOMContentLoaded 之后才加载）
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initUI);
+  } else {
+    initUI();
+  }
+
+  function applyReportLabels() {
+    if (typeof tAdmin !== 'function') return;
+    const setText = (id, key) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = tAdmin(key);
+    };
+    setText('quickTodayBtn', 'quickToday');
+    setText('quickWeekBtn', 'quickWeek');
+    setText('quickMonthBtn', 'quickMonth');
+    setText('quickYearBtn', 'quickYear');
+    setText('reportDateLabel', 'date');
+  }
+
+// ═══════════════════════════════════════════════════════════
+// 高级导出弹窗（2026-10-01）
+// ═══════════════════════════════════════════════════════════
+function openAdvancedExport() {
+    const today = new Date().toISOString().slice(0, 10);
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    document.getElementById('advExportStart').value = weekAgo;
+    document.getElementById('advExportEnd').value = today;
+    document.getElementById('advancedExportModal').style.display = 'flex';
+}
+
+function closeAdvancedExport() {
+    document.getElementById('advancedExportModal').style.display = 'none';
+}
+
+async function doAdvancedExport() {
+    const start = document.getElementById('advExportStart').value;
+    const end = document.getElementById('advExportEnd').value;
+    const dim = document.getElementById('advExportDim').value;
+    const statuses = Array.from(document.querySelectorAll('.adv-status:checked'))
+        .map(cb => cb.value).join(',');
+
+    if (!start || !end) { SLF.ui.toast('❌ ' + (tAdmin('selectDateRange') || '请选择日期范围')); return; }
+    if (!statuses) { SLF.ui.toast('❌ ' + (tAdmin('selectAtLeastOne') || '请至少选择一个状态')); return; }
+
+    const params = new URLSearchParams({ startDate: start, endDate: end, dimension: dim, statuses });
+    const token = SLF.store.rawGetSession('adminToken') || '';
+    const storeId = SLF.store.rawGetSession('adminStoreId') || SLF.store.rawGet('storeId') || '1';
+
+    try {
+        const res = await fetch('/api/admin/export-advanced?' + params.toString(), {
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'X-Store-Id': String(storeId)
+            }
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || 'HTTP ' + res.status);
+        }
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${dim}_${start}_${end}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        SLF.ui.toast('✅ ' + (tAdmin('exported') || '已导出'));
+        closeAdvancedExport();
+    } catch (e) {
+        SLF.ui.toast('❌ ' + (tAdmin('exportFailed') || '导出失败') + ': ' + e.message);
+    }
+}
+
+window.openAdvancedExport = openAdvancedExport;
+window.closeAdvancedExport = closeAdvancedExport;
+window.doAdvancedExport = doAdvancedExport;
+
+})();
+})();
+
+// ═══════════════════════════════════════════════════════════
+// advExportBtn 事件委托（2026-10-01）
+// 挂在 document 捕获阶段，不管按钮怎么被 i18n 重建都能命中
+// ═══════════════════════════════════════════════════════════
+(function delegateAdvExport() {
+    document.addEventListener('click', function (e) {
+        // 捕获阶段先判断
+        const btn = e.target && e.target.closest && e.target.closest('#advExportBtn');
+        if (!btn) return;
+
+        // 拦掉其它所有监听（包括 i18n 后重绑的导出 handler）
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        // 打开弹窗
+        try {
+            if (typeof window.openAdvancedExport === 'function') {
+                window.openAdvancedExport();
+            } else if (typeof openAdvancedExport === 'function') {
+                openAdvancedExport();
+            } else {
+                console.error('[delegateAdvExport] openAdvancedExport 未定义');
+            }
+        } catch (err) {
+            console.error('[delegateAdvExport] 打开弹窗失败:', err);
+        }
+        return false;
+    }, true);   // ← true = 捕获阶段，先于一切其他监听
+})();
+
+
+/* ========== pages/admin/financial-reconciliation.js ========== */
+/*
+ * pages/admin/financial-reconciliation.js — 财务对账人工审核工作台
+ */
+(function () {
+  'use strict';
+
+  const ctx = window.SLF && window.SLF.admin;
+  if (!ctx) return;
+  const { $, api, esc } = ctx;
+  const root = () => document.getElementById('financialReconciliationPanel');
+  const state = { batches: [], batchId: null, nextBatchCursor: null, nextRowCursor: null, rows: [], loading: false, monthRows: [], monthCurrency: '', closeHistoryCursor: null, closeHistory: [], exceptionRows: [], nextExceptionCursor: null, exceptionLoading: false, exceptionHistory: {}, performanceExportAuditCursor: null, performanceExportAuditRows: [] };
+
+  function t(key, fallback) {
+    const value = ctx.tAdmin ? ctx.tAdmin(key) : key;
+    return value && value !== key ? value : (fallback || key);
+  }
+  function toast(message) {
+    if (window.SLF && SLF.ui && SLF.ui.toast) SLF.ui.toast(message);
+  }
+  function dateValue(date) {
+    return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+  }
+  function moneyMinor(value, currency) {
+    const amount = Number(value);
+    return Number.isSafeInteger(amount) ? esc(String(amount)) + ' ' + esc(currency || '') + ' ' + t('financeMinorUnits', 'minor units') : '—';
+  }
+  function statusLabel(status) {
+    const labels = {
+      pending: t('financePending', 'Pending'), matched: t('financeMatched', 'Matched'),
+      unmatched: t('financeUnmatched', 'Unmatched'), ambiguous: t('financeAmbiguous', 'Ambiguous'),
+      exception: t('financeException', 'Exception'), imported: t('financeImported', 'Imported'),
+      validated: t('financeValidated', 'Validated'), closed: t('financeClosed', 'Closed')
+    };
+    return labels[status] || esc(status || '—');
+  }
+  function requirePermission() {
+    if (!ctx.hasPermission || !ctx.hasPermission('can_manage_financial_reconciliation')) {
+      toast('❌ ' + t('noPermission', 'No permission'));
+      return false;
+    }
+    return true;
+  }
+  function renderBatchRows(rows) {
+    const target = $('#financeBatchList');
+    if (!target) return;
+    if (!rows.length && !state.batches.length) {
+      target.innerHTML = '<div class="empty-hint">' + t('financeNoBatches', 'No reconciliation batches yet') + '</div>';
+      return;
+    }
+    target.innerHTML = rows.map(batch => {
+      const counts = [
+        t('financeMatched', 'Matched') + ': ' + Number(batch.matched_count || 0),
+        t('financePending', 'Pending') + ': ' + Number(batch.pending_count || 0),
+        t('financeException', 'Exceptions') + ': ' + Number(batch.exception_count || 0)
+      ].join(' · ');
+      return '<button type="button" class="finance-batch-card" data-finance-batch="' + Number(batch.id) + '" style="display:block;width:100%;text-align:left;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;margin:8px 0;color:inherit;cursor:pointer;">' +
+        '<span style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;"><strong>#' + Number(batch.id) + ' · ' + esc(batch.provider_code) + ' / ' + esc(batch.external_batch_id) + '</strong><span>' + statusLabel(batch.status) + '</span></span>' +
+        '<span style="display:block;color:#aaa;font-size:12px;margin-top:6px;">' + esc(batch.imported_at || '') + ' · ' + Number(batch.row_count || 0) + ' ' + t('financeRows', 'rows') + ' · ' + esc(batch.currency_code) + '</span>' +
+        '<span style="display:block;color:#bbb;font-size:12px;margin-top:5px;">' + counts + '</span></button>';
+    }).join('');
+  }
+  async function loadBatches(append) {
+    if (!requirePermission() || state.loading) return;
+    state.loading = true;
+    const target = $('#financeBatchList');
+    if (!append && target) target.innerHTML = '<div class="empty-hint">' + t('loading', 'Loading…') + '</div>';
+    try {
+      const query = new URLSearchParams({ limit: '30' });
+      if (append && state.nextBatchCursor) query.set('afterId', String(state.nextBatchCursor));
+      const data = await api('/admin/financial-reconciliation/batches?' + query.toString());
+      const rows = Array.isArray(data.rows) ? data.rows : [];
+      state.batches = append ? state.batches.concat(rows) : rows;
+      state.nextBatchCursor = data.nextCursor || null;
+      renderBatchRows(state.batches);
+      const more = $('#financeBatchMore');
+      if (more) more.hidden = !state.nextBatchCursor;
+    } catch (error) {
+      if (target) target.innerHTML = '<div class="empty-hint">' + t('financeLoadFailed', 'Unable to load reconciliation batches') + '</div>';
+      toast('❌ ' + (error.message || t('financeLoadFailed', 'Load failed')));
+    } finally { state.loading = false; }
+  }
+  function renderItems() {
+    const target = $('#financeReviewRows');
+    if (!target) return;
+    if (!state.rows.length) {
+      target.innerHTML = '<div class="empty-hint">' + t('financeNoRows', 'No statement rows in this batch') + '</div>';
+      return;
+    }
+    target.innerHTML = state.rows.map(row => {
+      const suggestion = row.suggestion || {};
+      const suggestionText = suggestion.status === 'suggested'
+        ? t('financeSuggestedJournal', 'Suggested Ledger transaction') + ' #' + Number(suggestion.journalTransactionId)
+        : (suggestion.reason || suggestion.status || '—');
+      const canConfirm = suggestion.status === 'suggested' && row.matchStatus !== 'matched';
+      const actionButtons = [
+        canConfirm ? '<button type="button" data-finance-action="confirm" data-item="' + row.id + '" data-journal="' + Number(suggestion.journalTransactionId) + '">' + t('financeConfirm', 'Confirm') + '</button>' : '',
+        row.matchStatus === 'matched' ? '<button type="button" data-finance-action="release" data-item="' + row.id + '">' + t('financeRelease', 'Release') + '</button>' : '',
+        row.matchStatus !== 'matched' ? '<button type="button" data-finance-action="reject" data-item="' + row.id + '">' + t('financeReject', 'Reject') + '</button>' : '',
+        '<button type="button" data-finance-action="reassign" data-item="' + row.id + '">' + t('financeReassign', 'Reassign') + '</button>',
+        '<button type="button" data-finance-action="classify_exception" data-item="' + row.id + '">' + t('financeClassify', 'Classify') + '</button>'
+      ].filter(Boolean).join(' ');
+      return '<article class="finance-review-row" style="background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;margin:10px 0;">' +
+        '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><strong>#' + Number(row.rowNo) + ' · ' + esc(row.externalReference || row.transactionReference || '—') + '</strong><span>' + statusLabel(row.matchStatus) + '</span></div>' +
+        '<div style="color:#ccc;font-size:13px;margin:7px 0;">' + moneyMinor(row.amountMinor, row.currencyCode) + ' · ' + esc(row.direction) + ' · ' + esc(row.occurredAt || '') + '</div>' +
+        '<div style="color:#aaa;font-size:12px;overflow-wrap:anywhere;">' + esc(row.description || '') + '</div>' +
+        '<div style="color:#8ec5ff;font-size:12px;margin-top:7px;">' + esc(suggestionText) + '</div>' +
+        (row.exceptionCategory ? '<div style="color:#ffbd70;font-size:12px;margin-top:5px;">' + esc(row.exceptionCategory) + ' · ' + esc(row.exceptionNote || '') + '</div>' : '') +
+        '<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;">' + actionButtons + '</div></article>';
+    }).join('');
+  }
+  async function loadBatchItems(batchId, append) {
+    if (!requirePermission()) return;
+    state.batchId = Number(batchId);
+    const target = $('#financeReviewRows');
+    if (!append) {
+      state.rows = [];
+      state.nextRowCursor = null;
+      if (target) target.innerHTML = '<div class="empty-hint">' + t('loading', 'Loading…') + '</div>';
+    }
+    try {
+      const query = new URLSearchParams({ limit: '100' });
+      if (append && state.nextRowCursor) query.set('afterRowNo', String(state.nextRowCursor));
+      const data = await api('/admin/financial-reconciliation/batches/:batchId/items'.replace(':batchId', String(state.batchId)) + '?' + query.toString());
+      const rows = Array.isArray(data.items) ? data.items : [];
+      state.rows = append ? state.rows.concat(rows) : rows;
+      state.nextRowCursor = data.nextCursor || null;
+      const title = $('#financeSelectedBatch');
+      if (title) title.textContent = '#' + data.batch.id + ' · ' + data.batch.currencyCode + ' · ' + data.batch.rowCount + ' ' + t('financeRows', 'rows');
+      renderItems();
+      const more = $('#financeRowsMore');
+      if (more) more.hidden = !state.nextRowCursor;
+    } catch (error) {
+      if (target) target.innerHTML = '<div class="empty-hint">' + t('financeLoadFailed', 'Unable to load statement rows') + '</div>';
+      toast('❌ ' + (error.message || 'Load failed'));
+    }
+  }
+  function requestReason(action) {
+    const prompts = {
+      confirm: t('financeReasonConfirm', 'Reason for confirming this match (5–500 characters):'),
+      reject: t('financeReasonReject', 'Reason for rejecting this row (5–500 characters):'),
+      release: t('financeReasonRelease', 'Reason for releasing this allocation (5–500 characters):'),
+      reassign: t('financeReasonReassign', 'Reason for reassigning this row (5–500 characters):'),
+      classify_exception: t('financeReasonClassify', 'Reason for classifying this exception (5–500 characters):')
+    };
+    const reason = window.prompt(prompts[action] || t('financeReason', 'Reason (5–500 characters):'));
+    if (reason === null) return null;
+    if (reason.trim().length < 5 || reason.trim().length > 500) {
+      toast('❌ ' + t('financeReasonInvalid', 'Reason must contain 5–500 characters'));
+      return null;
+    }
+    return reason.trim();
+  }
+  async function submitReview(button) {
+    if (!requirePermission()) return;
+    const itemId = Number(button.dataset.item);
+    const action = button.dataset.financeAction;
+    const reason = requestReason(action);
+    if (!reason) return;
+    const body = { batchId: state.batchId, action, reason,
+      idempotencyKey: 'finance-ui-' + Date.now() + '-' + Math.random().toString(36).slice(2, 12) };
+    if (action === 'confirm') body.journalTransactionId = Number(button.dataset.journal);
+    if (action === 'reassign') {
+      const id = Number(window.prompt(t('financeJournalIdPrompt', 'Enter Ledger transaction ID:')));
+      if (!Number.isSafeInteger(id) || id <= 0) return;
+      body.journalTransactionId = id;
+    }
+    if (action === 'classify_exception') {
+      const category = String(window.prompt(t('financeCategoryPrompt', 'Category: refund, fee, settlement_difference, chargeback, other'), 'other') || '').trim();
+      if (!['refund', 'fee', 'settlement_difference', 'chargeback', 'other'].includes(category)) {
+        toast('❌ ' + t('financeCategoryInvalid', 'Unsupported exception category'));
+        return;
+      }
+      body.exceptionCategory = category;
+    }
+    button.disabled = true;
+    try {
+      await api('/admin/financial-reconciliation/items/:itemId/review'.replace(':itemId', String(itemId)), { method: 'POST', body });
+      toast('✅ ' + t('financeReviewSaved', 'Review saved'));
+      await loadBatchItems(state.batchId, false);
+      await loadBatches(false);
+    } catch (error) {
+      toast('❌ ' + (error.message || t('financeReviewFailed', 'Review failed')));
+    } finally { button.disabled = false; }
+  }
+  async function importBatch() {
+    if (!requirePermission()) return;
+    const input = $('#financeImportJson');
+    let parsed;
+    try { parsed = JSON.parse(input.value || ''); }
+    catch (_) { toast('❌ ' + t('financeInvalidJson', 'Invalid JSON')); return; }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      toast('❌ ' + t('financeInvalidJson', 'Invalid JSON object')); return;
+    }
+    const body = {
+      providerCode: parsed.providerCode, externalBatchId: parsed.externalBatchId,
+      statementSha256: parsed.statementSha256, currencyCode: parsed.currencyCode, rows: parsed.rows
+    };
+    const button = $('#financeImportButton');
+    button.disabled = true;
+    try {
+      const result = await api('/admin/financial-reconciliation/batches/import', { method: 'POST', body });
+      toast('✅ ' + t('financeImportDone', 'Batch imported') + ' #' + result.batchId);
+      input.value = '';
+      await loadBatches(false);
+      await loadBatchItems(result.batchId, false);
+    } catch (error) { toast('❌ ' + (error.message || t('financeImportFailed', 'Import failed'))); }
+    finally { button.disabled = false; }
+  }
+  function exportDailyCsv(rows) {
+    if (!rows.length) { toast(t('financeNoReportRows', 'No report rows')); return; }
+    const columns = ['report_date', 'currency_code', 'batch_count', 'statement_row_count', 'total_debit_minor', 'total_credit_minor', 'matched_count', 'pending_count', 'unmatched_count', 'ambiguous_count', 'exception_count', 'refund_exception_count', 'fee_exception_count', 'settlement_difference_exception_count', 'chargeback_exception_count', 'other_exception_count'];
+    const csv = [columns.join(','), ...rows.map(row => columns.map(key => {
+      const value = String(row[key] ?? '');
+      return '"' + value.replace(/"/g, '""') + '"';
+    }).join(','))].join('\r\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = 'financial-reconciliation-daily.csv';
+    document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+  }
+  async function loadDailySummary(exportCsv) {
+    if (!requirePermission()) return;
+    const from = $('#financeReportFrom').value;
+    const to = $('#financeReportTo').value;
+    try {
+      const data = await api('/admin/financial-reconciliation/daily-summary?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to));
+      const rows = Array.isArray(data.rows) ? data.rows : [];
+      const target = $('#financeDailyReport');
+      target.innerHTML = rows.length ? '<div style="overflow:auto;"><table style="width:100%;border-collapse:collapse;"><thead><tr>' +
+        ['report_date','currency_code','batch_count','statement_row_count','matched_count','pending_count','unmatched_count','ambiguous_count','exception_count'].map(key => '<th style="text-align:left;padding:9px;border-bottom:1px solid #555;">' + esc(t('financeCol_' + key, key)) + '</th>').join('') +
+        '</tr></thead><tbody>' + rows.map(row => '<tr>' + ['report_date','currency_code','batch_count','statement_row_count','matched_count','pending_count','unmatched_count','ambiguous_count','exception_count'].map(key => '<td style="padding:9px;border-bottom:1px solid rgba(255,255,255,.08);">' + esc(row[key] ?? '') + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>' : '<div class="empty-hint">' + t('financeNoReportRows', 'No report rows') + '</div>';
+      if (exportCsv) exportDailyCsv(rows);
+    } catch (error) { toast('❌ ' + (error.message || t('financeLoadFailed', 'Load failed'))); }
+  }
+
+
+  function renderSlaAlerts(items) {
+    const target=$('#financeSlaAlertList');if(!target)return;
+    if(!items.length){target.innerHTML='<div class="empty-hint">暂无待确认 SLA 提醒</div>';return;}
+    target.innerHTML=items.map(item=>{
+      const actions=item.status==='pending'
+        ? '<button type="button" data-sla-alert-ack="'+Number(item.alertId)+'">确认已知悉</button> <button type="button" data-sla-alert-dismiss="'+Number(item.alertId)+'">关闭提醒</button>'
+        : '<span style="font-size:12px;color:#aaa;">'+esc(item.status)+'</span>';
+      return '<article style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08);"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;"><strong>异常 #'+Number(item.itemId)+' · '+esc(item.category||'未分类')+'</strong><span>'+esc(item.status)+' · '+formatAge(item.ageSeconds)+' / SLA '+Number(item.slaHours)+'h</span></div><div style="font-size:12px;color:#aaa;margin:5px 0;">'+esc(item.externalReference||'无外部流水号')+' · '+esc(item.assignedAdminUsername||'未分配')+' · '+moneyMinor(item.amountMinor,item.currencyCode)+'</div>'+actions+' <button type="button" data-sla-alert-history="'+Number(item.alertId)+'">查看审计历史</button><div id="financeSlaAlertHistory-'+Number(item.alertId)+'" hidden style="margin-top:8px;"></div></article>';
+    }).join('');
+  }
+  async function loadSlaAlerts() {
+    if(!requirePermission())return;
+    const target=$('#financeSlaAlertList');if(target)target.innerHTML='<div class="empty-hint">加载中…</div>';
+    try{const status=$('#financeSlaAlertStatus')?.value||'pending';const data=await api('/admin/financial-reconciliation/exceptions/alerts?status='+encodeURIComponent(status)+'&limit=50');renderSlaAlerts(Array.isArray(data.items)?data.items:[]);}
+    catch(error){if(target)target.innerHTML='<div class="empty-hint">提醒加载失败</div>';toast('❌ '+(error.message||'提醒加载失败'));}
+  }
+  async function generateSlaAlerts() {
+    if(!requirePermission())return;
+    const raw=Number($('#financeExceptionSlaHours')?.value||24),slaHours=Number.isSafeInteger(raw)&&raw>=1&&raw<=720?raw:24;
+    try{const result=await api('/admin/financial-reconciliation/exceptions/alerts/generate',{method:'POST',body:{slaHours}});
+      toast('✅ 已扫描 '+Number(result.scanned)+' 条超时异常，新建提醒 '+Number(result.created)+' 条');await loadSlaAlerts();}
+    catch(error){toast('❌ '+(error.message||'生成提醒失败'));}
+  }
+  async function acknowledgeSlaAlert(button) {
+    if(!requirePermission())return;
+    const reason=window.prompt('请输入确认说明（5–500 字）：');if(reason===null)return;
+    if(reason.trim().length<5||reason.trim().length>500){toast('❌ 确认说明长度必须为 5–500 字');return;}
+    button.disabled=true;
+    try{await api('/admin/financial-reconciliation/exceptions/alerts/'+Number(button.dataset.slaAlertAck)+'/acknowledge',{method:'POST',body:{reason:reason.trim(),idempotencyKey:'sla-alert-ack-'+Date.now()+'-'+Math.random().toString(36).slice(2,10)}});
+      toast('✅ 已记录提醒确认');await loadSlaAlerts();await loadExceptionOperations();}
+    catch(error){toast('❌ '+(error.message||'确认提醒失败'));}
+    finally{button.disabled=false;}
+  }
+  async function dismissSlaAlert(button) {
+    if(!requirePermission())return;
+    const reason=window.prompt('请输入关闭提醒原因（5–500 字，不会关闭底层异常）：');if(reason===null)return;
+    if(reason.trim().length<5||reason.trim().length>500){toast('❌ 关闭原因长度必须为 5–500 字');return;}
+    button.disabled=true;
+    try{
+      await api('/admin/financial-reconciliation/exceptions/alerts/'+Number(button.dataset.slaAlertDismiss)+'/dismiss',{method:'POST',body:{reason:reason.trim(),idempotencyKey:'sla-alert-dismiss-'+Date.now()+'-'+Math.random().toString(36).slice(2,10)}});
+      toast('✅ 已关闭提醒（底层异常未变更）');await loadSlaAlerts();
+    }catch(error){toast('❌ '+(error.message||'关闭提醒失败'));}
+    finally{button.disabled=false;}
+  }
+  function setReportRange(kind) {
+    const now=new Date(),to=dateValue(now),from=new Date(now);
+    if(kind==='week')from.setDate(from.getDate()-6);
+    else if(kind==='month')from.setDate(from.getDate()-29);
+    else if(kind==='calendar-month')from.setDate(1);
+    const fromInput=$('#financeReportFrom'),toInput=$('#financeReportTo');
+    if(fromInput)fromInput.value=dateValue(from);if(toInput)toInput.value=to;loadDailySummary(false);
+  }
+
+  async function loadSlaAlertHistory(alertId) {
+    const target=$('#financeSlaAlertHistory-'+Number(alertId));if(!target)return;
+    if(!target.hidden){target.hidden=true;return;}
+    target.hidden=false;target.innerHTML='<div class="empty-hint">加载审计历史…</div>';
+    try{const data=await api('/admin/financial-reconciliation/exceptions/alerts/'+Number(alertId)+'/history?limit=50');const rows=Array.isArray(data.items)?data.items:[];
+      target.innerHTML=rows.length?rows.map(row=>'<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.08);"><strong>'+esc(row.action)+'</strong> · '+esc(row.actorUsername)+' · '+esc(row.createdAt||'')+'<div style="font-size:12px;color:#aaa;">'+esc(row.reason)+'</div><div style="font-size:11px;color:#888;word-break:break-all;">Hash: '+esc(row.eventHash)+'</div></div>').join(''):'<div class="empty-hint">暂无审计事件</div>';
+    }catch(error){target.innerHTML='<div class="empty-hint">审计历史加载失败</div>';toast('❌ '+(error.message||'审计历史加载失败'));}
+  }
+  async function loadPeriodSummary(period,exportCsv=false) {
+    if(!requirePermission())return;const from=$('#financeReportFrom')?.value,to=$('#financeReportTo')?.value,target=$('#financePeriodReport');
+    if(!from||!to){toast('请先选择开始和结束日期');return;}if(target)target.innerHTML='<div class="empty-hint">加载周期报表…</div>';
+    try{const data=await api('/admin/financial-reconciliation/period-summary?period='+encodeURIComponent(period)+'&from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to));
+      const rows=Array.isArray(data.rows)?data.rows:[],columns=['periodStart','periodEnd','currencyCode','batchCount','statementRowCount','totalDebitMinor','totalCreditMinor','matchedCount','pendingCount','unmatchedCount','ambiguousCount','exceptionCount'];
+      if(target)target.innerHTML=rows.length?'<div style="overflow:auto;"><table style="width:100%;border-collapse:collapse;"><thead><tr>'+columns.map(k=>'<th style="text-align:left;padding:8px;border-bottom:1px solid #555;">'+esc(k)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(row=>'<tr>'+columns.map(k=>'<td style="padding:8px;border-bottom:1px solid rgba(255,255,255,.08);">'+esc(row[k]??'')+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>':'<div class="empty-hint">所选周期暂无对账数据</div>';
+      if(exportCsv){const csv=await api('/admin/financial-reconciliation/period-report-export?period='+encodeURIComponent(period)+'&from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to));if(typeof csv!=='string'||!csv.startsWith('\uFEFF'))throw new Error('服务端导出响应格式无效');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='financial-reconciliation-'+period+'-report.csv';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);}
+    }catch(error){if(target)target.innerHTML='<div class="empty-hint">周期报表加载失败</div>';toast('❌ '+(error.message||'周期报表加载失败'));}
+  }
+  function exceptionStatusLabel(status) {
+    const labels = {
+      open: t('financeExceptionOpen', 'Open'),
+      in_progress: t('financeExceptionInProgress', 'In progress'),
+      resolved: t('financeExceptionResolved', 'Resolved'),
+      closed: t('financeExceptionClosed', 'Closed')
+    };
+    return labels[status] || esc(status || '—');
+  }
+  function renderExceptionQueue() {
+    const target = $('#financeExceptionQueue');
+    if (!target) return;
+    if (!state.exceptionRows.length) {
+      target.innerHTML = '<div class="empty-hint">' + t('financeExceptionNoRows', 'No exceptions match these filters') + '</div>';
+      return;
+    }
+    target.innerHTML = state.exceptionRows.map(row => {
+      const status = row.caseStatus || 'open';
+      const actions = [
+        status !== 'closed' ? '<button type="button" data-exception-action="assign" data-item="' + Number(row.itemId) + '" data-batch="' + Number(row.batchId) + '">' + t('financeExceptionAssign', 'Assign') + '</button>' : '',
+        row.assignedAdminId && status !== 'closed' ? '<button type="button" data-exception-action="unassign" data-item="' + Number(row.itemId) + '" data-batch="' + Number(row.batchId) + '">' + t('financeExceptionUnassign', 'Unassign') + '</button>' : '',
+        status === 'open' ? '<button type="button" data-exception-action="start" data-item="' + Number(row.itemId) + '" data-batch="' + Number(row.batchId) + '">' + t('financeExceptionStart', 'Start') + '</button>' : '',
+        status !== 'closed' ? '<button type="button" data-exception-action="add_note" data-item="' + Number(row.itemId) + '" data-batch="' + Number(row.batchId) + '">' + t('financeExceptionAddNote', 'Add note') + '</button>' : '',
+        ['open','in_progress'].includes(status) ? '<button type="button" data-exception-action="resolve" data-item="' + Number(row.itemId) + '" data-batch="' + Number(row.batchId) + '">' + t('financeExceptionResolve', 'Resolve') + '</button>' : '',
+        status === 'resolved' ? '<button type="button" data-exception-action="close" data-item="' + Number(row.itemId) + '" data-batch="' + Number(row.batchId) + '">' + t('financeExceptionClose', 'Close case') + '</button>' : '',
+        ['resolved','closed'].includes(status) ? '<button type="button" data-exception-action="reopen" data-item="' + Number(row.itemId) + '" data-batch="' + Number(row.batchId) + '">' + t('financeExceptionReopen', 'Reopen') + '</button>' : ''
+      ].filter(Boolean).join(' ');
+      return '<article style="background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px;margin:10px 0;">' +
+        '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><strong>#' + Number(row.itemId) + ' · ' + esc(row.externalReference || row.transactionReference || '—') + '</strong><span>' + exceptionStatusLabel(status) + '</span></div>' +
+        '<div style="font-size:13px;color:#ccc;margin:7px 0;">' + moneyMinor(row.amountMinor, row.currencyCode) + ' · ' + esc(row.direction) + ' · ' + esc(row.category || '') + ' · ' + esc(row.importedAt || '') + '</div>' +
+        '<div style="font-size:12px;color:#aaa;">' + esc(row.description || '') + '</div>' +
+        '<div style="font-size:12px;margin-top:7px;">' + t('financeExceptionAssignedTo', 'Assigned to') + ': ' + esc(row.assignedAdminUsername || '—') + '</div>' +
+        (row.resolutionNote ? '<div style="font-size:12px;color:#aaa;margin-top:5px;">' + t('financeExceptionResolution', 'Resolution') + ': ' + esc(row.resolutionNote) + '</div>' : '') +
+        '<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;">' + actions +
+        '<button type="button" data-exception-history="' + Number(row.itemId) + '" data-batch="' + Number(row.batchId) + '">' + t('financeExceptionAuditHistory', 'Audit history') + '</button></div>' +
+        '<div id="financeExceptionHistory-' + Number(row.itemId) + '" hidden style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08);"></div></article>';
+    }).join('');
+    const more = $('#financeExceptionMore');
+    if (more) more.hidden = !state.nextExceptionCursor;
+  }
+  async function loadExceptionQueue(append) {
+    if (!requirePermission() || state.exceptionLoading) return;
+    state.exceptionLoading = true;
+    const target = $('#financeExceptionQueue');
+    if (!append) {
+      state.exceptionRows = [];
+      state.nextExceptionCursor = null;
+      state.exceptionHistory = {};
+      if (target) target.innerHTML = '<div class="empty-hint">' + t('loading', 'Loading…') + '</div>';
+    }
+    try {
+      const query = new URLSearchParams({ limit: '50' });
+      const category = $('#financeExceptionCategory')?.value || 'all';
+      const status = $('#financeExceptionStatus')?.value || 'all';
+      if (category !== 'all') query.set('category', category);
+      if (status !== 'all') query.set('status', status);
+      if (append && state.nextExceptionCursor) query.set('afterId', String(state.nextExceptionCursor));
+      const data = await api('/admin/financial-reconciliation/exceptions?' + query.toString());
+      const rows = Array.isArray(data.items) ? data.items : [];
+      state.exceptionRows = append ? state.exceptionRows.concat(rows) : rows;
+      state.nextExceptionCursor = data.nextCursor || null;
+      renderExceptionQueue();
+    } catch (error) {
+      if (target) target.innerHTML = '<div class="empty-hint">' + t('financeLoadFailed', 'Unable to load exceptions') + '</div>';
+      toast('❌ ' + (error.message || t('financeLoadFailed', 'Load failed')));
+    } finally { state.exceptionLoading = false; }
+  }
+
+  async function loadExceptionHistory(button, append) {
+    const itemId = Number(button.dataset.item);
+    const batchId = Number(button.dataset.batch);
+    if (!Number.isSafeInteger(itemId) || itemId <= 0 || !Number.isSafeInteger(batchId) || batchId <= 0) return;
+    const target = $('#financeExceptionHistory-' + itemId);
+    if (!target) return;
+    const stateKey = String(itemId);
+    const history = state.exceptionHistory[stateKey] || { items: [], nextCursor: null, loaded: false };
+    target.hidden = false;
+    try {
+      const query = new URLSearchParams({ batchId: String(batchId), limit: '50' });
+      if (append && history.nextCursor) query.set('afterId', String(history.nextCursor));
+      const data = await api('/admin/financial-reconciliation/exceptions/' + itemId + '/history?' + query.toString());
+      history.items = append ? history.items.concat(data.items || []) : (data.items || []);
+      history.nextCursor = data.nextCursor || null;
+      history.loaded = true;
+      state.exceptionHistory[stateKey] = history;
+      target.innerHTML = history.items.map(event =>
+        '<article style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06);">' +
+        '<strong>#' + Number(event.eventId) + ' · ' + esc(event.action) + '</strong> · ' +
+        esc(event.before?.status || '—') + ' → ' + esc(event.after?.status || '—') +
+        '<div style="font-size:12px;color:#aaa;margin-top:4px;">' + esc(event.actorUsername) + ' · ' + esc(event.createdAt) + '</div>' +
+        '<div style="font-size:12px;margin-top:4px;">' + esc(event.reason) + '</div>' +
+        '<div style="font-size:11px;color:#888;overflow-wrap:anywhere;">SHA-256: ' + esc(event.eventHash) + '</div></article>'
+      ).join('') + (history.nextCursor
+        ? '<button type="button" data-exception-history-more="' + itemId + '" data-batch="' + batchId + '">Load more audit events</button>' : '');
+    } catch (error) {
+      target.innerHTML = '<div class="empty-hint">' + t('financeLoadFailed', 'Unable to load audit history') + '</div>';
+      toast('❌ ' + (error.message || t('financeLoadFailed', 'Load failed')));
+    }
+  }
+  async function submitExceptionAction(button) {
+    if (!requirePermission()) return;
+    const action = button.dataset.exceptionAction;
+    const itemId = Number(button.dataset.item);
+    const batchId = Number(button.dataset.batch);
+    let assignedAdminId;
+    if (action === 'assign') {
+      assignedAdminId = Number(window.prompt(t('financeExceptionAssigneePrompt', 'Enter active merchant administrator ID:')));
+      if (!Number.isSafeInteger(assignedAdminId) || assignedAdminId <= 0) return;
+    }
+    const reason = window.prompt(t('financeExceptionReasonPrompt', 'Enter handling note / reason (5–500 characters):'));
+    if (reason === null) return;
+    if (reason.trim().length < 5 || reason.trim().length > 500) {
+      toast('❌ ' + t('financeReasonInvalid', 'Reason must contain 5–500 characters'));
+      return;
+    }
+    const body = {
+      batchId, action, reason: reason.trim(),
+      idempotencyKey: 'finance-exception-ui-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10)
+    };
+    if (assignedAdminId) body.assignedAdminId = assignedAdminId;
+    button.disabled = true;
+    try {
+      await api('/admin/financial-reconciliation/exceptions/' + itemId + '/workflow', { method: 'POST', body });
+      toast('✅ ' + t('financeExceptionActionSaved', 'Exception handling action recorded'));
+      await loadExceptionQueue(false);
+    } catch (error) {
+      toast('❌ ' + (error.message || t('financeExceptionActionFailed', 'Exception handling action failed')));
+    } finally { button.disabled = false; }
+  }
+  function formatAge(seconds) {
+    const value = Math.max(0, Number(seconds) || 0);
+    const days = Math.floor(value / 86400), hours = Math.floor((value % 86400) / 3600);
+    return days ? days + '天 ' + hours + '小时' : hours + '小时';
+  }
+  function renderExceptionOperations(data) {
+    const summary = $('#financeExceptionOpsSummary'), workload = $('#financeExceptionOpsWorkload');
+    const trend = $('#financeExceptionOpsTrend'), overdue = $('#financeExceptionOpsOverdue');
+    if (!summary || !workload || !trend || !overdue) return;
+    const totals = data.summary || {}, ageing = totals.ageing || {};
+    summary.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">' +
+      [['待处理',totals.openCount],['处理中',totals.inProgressCount],['活跃异常',totals.activeCount],
+       ['超过 '+Number(data.slaHours)+' 小时',totals.overdueCount],['24 小时内',ageing.under24Hours],
+       ['1–3 天',ageing.from1To3Days],['3–7 天',ageing.from3To7Days],['超过 7 天',ageing.over7Days]]
+      .map(pair => '<div style="padding:12px;border:1px solid rgba(255,255,255,.1);border-radius:10px;"><div style="font-size:12px;color:#aaa;">'+esc(pair[0])+'</div><strong style="font-size:22px;">'+Number(pair[1]||0)+'</strong></div>').join('')+'</div>';
+    const people = Array.isArray(data.workload) ? data.workload : [];
+    workload.innerHTML = people.length ? '<div style="overflow:auto;"><table style="width:100%;border-collapse:collapse;"><thead><tr><th style="text-align:left;padding:8px;">负责人</th><th style="text-align:right;padding:8px;">活跃</th><th style="text-align:right;padding:8px;">超时</th><th style="text-align:right;padding:8px;">最老账龄</th></tr></thead><tbody>'+
+      people.map(row=>'<tr><td style="padding:8px;border-top:1px solid rgba(255,255,255,.08);">'+esc(row.username||'未分配')+'</td><td style="text-align:right;padding:8px;">'+Number(row.activeCount)+'</td><td style="text-align:right;padding:8px;">'+Number(row.overdueCount)+'</td><td style="text-align:right;padding:8px;">'+formatAge(row.oldestAgeSeconds)+'</td></tr>').join('')+'</tbody></table></div>' : '<div class="empty-hint">暂无活跃异常</div>';
+    const days = Array.isArray(data.trend) ? data.trend : [];
+    trend.innerHTML = days.length ? '<div style="overflow:auto;"><table style="width:100%;border-collapse:collapse;"><thead><tr><th style="text-align:left;padding:8px;">日期</th><th style="text-align:right;padding:8px;">新增异常</th><th style="text-align:right;padding:8px;">解决事件</th></tr></thead><tbody>'+
+      days.map(row=>'<tr><td style="padding:8px;border-top:1px solid rgba(255,255,255,.08);">'+esc(row.date)+'</td><td style="text-align:right;padding:8px;">'+Number(row.openedCount)+'</td><td style="text-align:right;padding:8px;">'+Number(row.resolvedEventCount)+'</td></tr>').join('')+'</tbody></table></div>' : '<div class="empty-hint">近 30 天暂无异常事件</div>';
+    const overdueRows = Array.isArray(data.overdueItems) ? data.overdueItems : [];
+    overdue.innerHTML = overdueRows.length ? overdueRows.map(row=>'<article style="padding:9px 0;border-bottom:1px solid rgba(255,255,255,.08);"><strong>#'+Number(row.itemId)+' · '+esc(row.category||'未分类')+'</strong><div style="font-size:12px;color:#aaa;margin-top:4px;">'+esc(row.externalReference||'无外部流水号')+' · '+esc(row.assignedAdminUsername||'未分配')+' · 账龄 '+formatAge(row.ageSeconds)+' · '+moneyMinor(row.amountMinor,row.currencyCode)+'</div></article>').join('') : '<div class="empty-hint">当前没有超过 SLA 的活跃异常</div>';
+  }
+  async function loadExceptionOperations() {
+    if (!requirePermission()) return;
+    const target = $('#financeExceptionOpsSummary');
+    if (target) target.innerHTML = '<div class="empty-hint">'+t('loading','Loading…')+'</div>';
+    const raw = Number($('#financeExceptionSlaHours')?.value || 24);
+    const slaHours = Number.isSafeInteger(raw) && raw >= 1 && raw <= 720 ? raw : 24;
+    try {
+      const data = await api('/admin/financial-reconciliation/exceptions/operations-summary?slaHours='+encodeURIComponent(String(slaHours)));
+      renderExceptionOperations(data);
+    } catch (error) {
+      if (target) target.innerHTML = '<div class="empty-hint">'+t('financeLoadFailed','Unable to load exception operations')+'</div>';
+      toast('❌ '+(error.message||t('financeLoadFailed','Load failed')));
+    }
+  }
+  function monthStatusLabel(status) {
+    const labels = {
+      open: t('financeMonthOpen', 'Open'),
+      close_pending: t('financeMonthClosePending', 'Close approval pending'),
+      locked: t('financeMonthLocked', 'Locked'),
+      reopen_pending: t('financeMonthReopenPending', 'Reopen approval pending')
+    };
+    return labels[status] || esc(status || '—');
+  }
+  function renderMonthPreview() {
+    const target = $('#financeMonthPreview');
+    const select = $('#financeCloseCurrency');
+    if (!target || !select) return;
+    const rows = state.monthRows;
+    const previous = state.monthCurrency;
+    select.innerHTML = rows.map(row => '<option value="' + esc(row.currencyCode) + '">' + esc(row.currencyCode) + '</option>').join('');
+    if (rows.some(row => row.currencyCode === previous)) select.value = previous;
+    state.monthCurrency = select.value || '';
+    if (!rows.length) {
+      target.innerHTML = '<div class="empty-hint">' + t('financeMonthNoBatches', 'No imported batches for this month and store') + '</div>';
+      $('#financeCloseStatus').innerHTML = '<div class="empty-hint">' + t('financeMonthNoPeriod', 'No monthly close period is available') + '</div>';
+      $('#financeCloseActions').innerHTML = '';
+      $('#financeCloseHistory').innerHTML = '';
+      return;
+    }
+    target.innerHTML = '<div style="overflow:auto;"><table style="width:100%;border-collapse:collapse;"><thead><tr>' +
+      ['currencyCode','batchCount','statementRowCount','totalDebitMinor','totalCreditMinor','matchedCount','unresolvedCount'].map(key =>
+        '<th style="text-align:left;padding:9px;border-bottom:1px solid #555;">' + esc(t('financeMonth_' + key, key)) + '</th>').join('') +
+      '</tr></thead><tbody>' + rows.map(row => '<tr>' +
+        [row.currencyCode,row.batchCount,row.statementRowCount,row.totalDebitMinor,row.totalCreditMinor,row.matchedCount,row.unresolvedCount].map(value =>
+          '<td style="padding:9px;border-bottom:1px solid rgba(255,255,255,.08);">' + esc(value ?? '') + '</td>').join('') +
+        '</tr>').join('') + '</tbody></table></div>';
+  }
+  function renderMonthPeriod(period) {
+    const status = $('#financeCloseStatus');
+    const actions = $('#financeCloseActions');
+    if (!status || !actions) return;
+    const periodExists = Boolean(period);
+    period = period || { status: 'open' };
+    const details = [
+      !periodExists ? t('financeMonthNotInitialized', 'No close request has been submitted yet') : '',
+      t('financeMonthStatus', 'Status') + ': ' + monthStatusLabel(period.status),
+      period.pendingActorUsername ? t('financeMonthRequestedBy', 'Requested by') + ': ' + esc(period.pendingActorUsername) : '',
+      period.pendingReason ? t('financeMonthReason', 'Reason') + ': ' + esc(period.pendingReason) : '',
+      period.lockedByAdminId ? t('financeMonthLockedBy', 'Locked by administrator') + ': #' + Number(period.lockedByAdminId) : '',
+      period.lockedAt ? t('financeMonthLockedAt', 'Locked at') + ': ' + esc(period.lockedAt) : ''
+    ].filter(Boolean);
+    status.innerHTML = '<div style="display:grid;gap:6px;">' + details.map(line => '<div>' + line + '</div>').join('') + '</div>';
+    const row = state.monthRows.find(item => item.currencyCode === state.monthCurrency);
+    const ready = Boolean(row && row.closeReady && Number(row.statementRowCount) > 0);
+    let choices = [];
+    if (period.status === 'open') choices = [{ action: 'request_close', label: t('financeMonthRequestClose', 'Request close'), disabled: !ready }];
+    if (period.status === 'close_pending') choices = [
+      { action: 'approve_close', label: t('financeMonthApproveClose', 'Approve close') },
+      { action: 'reject_close', label: t('financeMonthRejectClose', 'Reject close') }
+    ];
+    if (period.status === 'locked') choices = [{ action: 'request_reopen', label: t('financeMonthRequestReopen', 'Request reopen') }];
+    if (period.status === 'reopen_pending') choices = [
+      { action: 'approve_reopen', label: t('financeMonthApproveReopen', 'Approve reopen') },
+      { action: 'reject_reopen', label: t('financeMonthRejectReopen', 'Reject reopen') }
+    ];
+    actions.innerHTML = choices.map(choice => '<button type="button" data-month-close-action="' + choice.action + '"' +
+      (choice.disabled ? ' disabled title="' + esc(t('financeMonthNotReady', 'All statement rows must be matched before close')) + '"' : '') +
+      ' style="margin:6px 6px 0 0;">' + esc(choice.label) + '</button>').join('');
+  }
+  async function loadMonthHistory() {
+    if (!requirePermission() || !state.monthCurrency) return;
+    const target = $('#financeCloseHistory');
+    if (!target) return;
+    try {
+      const month = $('#financeCloseMonth').value;
+      const query = new URLSearchParams({ month, currencyCode: state.monthCurrency, limit: '50' });
+      if (state.closeHistoryCursor) query.set('afterId', String(state.closeHistoryCursor));
+      const data = await api('/admin/financial-reconciliation/month-close/history?' + query.toString());
+      const items = Array.isArray(data.items) ? data.items : [];
+      state.closeHistory = state.closeHistoryCursor ? state.closeHistory.concat(items) : items;
+      state.closeHistoryCursor = data.nextCursor || null;
+      target.innerHTML = state.closeHistory.length ? state.closeHistory.map(item =>
+        '<article style="border-bottom:1px solid rgba(255,255,255,.08);padding:9px 0;">' +
+        '<strong>#' + Number(item.eventId) + ' · ' + esc(item.action) + '</strong> · ' +
+        esc(item.beforeStatus) + ' → ' + esc(item.afterStatus) +
+        '<div style="font-size:12px;color:#aaa;margin-top:4px;">' + esc(item.actorUsername) + ' · ' + esc(item.createdAt) + '</div>' +
+        '<div style="font-size:12px;margin-top:4px;">' + esc(item.reason) + '</div>' +
+        '<div style="font-size:11px;color:#888;overflow-wrap:anywhere;">SHA-256: ' + esc(item.eventHash) + '</div></article>'
+      ).join('') : '<div class="empty-hint">' + t('financeMonthNoHistory', 'No approval history') + '</div>';
+      const more = $('#financeCloseHistoryMore');
+      if (more) more.hidden = !state.closeHistoryCursor;
+    } catch (error) {
+      target.innerHTML = '<div class="empty-hint">' + t('financeLoadFailed', 'Unable to load monthly close history') + '</div>';
+      toast('❌ ' + (error.message || t('financeLoadFailed', 'Load failed')));
+    }
+  }
+  async function loadMonthPeriod() {
+    if (!requirePermission() || !state.monthCurrency) return;
+    const month = $('#financeCloseMonth').value;
+    try {
+      const query = new URLSearchParams({ month, currencyCode: state.monthCurrency });
+      const data = await api('/admin/financial-reconciliation/month-close/period?' + query.toString());
+      renderMonthPeriod(data.period || null);
+      state.closeHistoryCursor = null;
+      state.closeHistory = [];
+      await loadMonthHistory();
+    } catch (error) {
+      toast('❌ ' + (error.message || t('financeLoadFailed', 'Load failed')));
+    }
+  }
+  async function loadMonthlyClose() {
+    if (!requirePermission()) return;
+    const monthInput = $('#financeCloseMonth');
+    if (!monthInput) return;
+    const now = new Date();
+    if (!monthInput.value) monthInput.value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    try {
+      const data = await api('/admin/financial-reconciliation/monthly-close-preview?month=' + encodeURIComponent(monthInput.value));
+      state.monthRows = Array.isArray(data.rows) ? data.rows : [];
+      renderMonthPreview();
+      await loadMonthPeriod();
+    } catch (error) {
+      toast('❌ ' + (error.message || t('financeLoadFailed', 'Load failed')));
+    }
+  }
+  async function submitMonthClose(button) {
+    if (!requirePermission() || !state.monthCurrency) return;
+    const action = button.dataset.monthCloseAction;
+    const reason = window.prompt(t('financeMonthReasonPrompt', 'Enter an audit reason (5–500 characters):'));
+    if (reason === null) return;
+    if (reason.trim().length < 5 || reason.trim().length > 500) {
+      toast('❌ ' + t('financeReasonInvalid', 'Reason must contain 5–500 characters'));
+      return;
+    }
+    const body = {
+      month: $('#financeCloseMonth').value,
+      currencyCode: state.monthCurrency,
+      action,
+      reason: reason.trim(),
+      idempotencyKey: 'month-close-ui-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10)
+    };
+    button.disabled = true;
+    try {
+      await api('/admin/financial-reconciliation/month-close/transition', { method: 'POST', body });
+      toast('✅ ' + t('financeMonthActionSaved', 'Monthly close action recorded'));
+      await loadMonthlyClose();
+    } catch (error) {
+      toast('❌ ' + (error.message || t('financeMonthActionFailed', 'Monthly close action failed')));
+    } finally { button.disabled = false; }
+  }
+
+  function performancePercent(value) { return value === null || value === undefined ? '—' : Number(value).toFixed(2) + '%'; }
+  function renderPerformanceTable(targetId, rows, columns, emptyText) {
+    const target=$('#'+targetId);if(!target)return;
+    if(!rows.length){target.innerHTML='<div class="empty-hint">'+esc(emptyText)+'</div>';return;}
+    target.innerHTML='<div style="overflow:auto;"><table style="width:100%;border-collapse:collapse;"><thead><tr>'+
+      columns.map(col=>'<th style="text-align:left;padding:8px;border-bottom:1px solid #555;white-space:nowrap;">'+esc(col.label)+'</th>').join('')+
+      '</tr></thead><tbody>'+rows.map(row=>'<tr>'+columns.map(col=>'<td style="padding:8px;border-bottom:1px solid rgba(255,255,255,.08);">'+esc(col.format?col.format(row[col.key]):(row[col.key]??'—'))+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
+  }
+  function renderExceptionPerformance(data) {
+    const summary=$('#financeExceptionPerformanceSummary');
+    const currencies=Array.isArray(data.byCurrency)?data.byCurrency:[],assignees=Array.isArray(data.byAssignee)?data.byAssignee:[],categories=Array.isArray(data.byCategory)?data.byCategory:[];
+    if(summary)summary.innerHTML='<div style="display:flex;gap:10px;flex-wrap:wrap;"><span>当前 SLA：<strong>'+Number(data.slaHours)+' 小时</strong></span><span>统计币种：<strong>'+currencies.length+'</strong></span><span>活跃异常：<strong>'+currencies.reduce((n,r)=>n+Number(r.activeCount||0),0)+'</strong></span><span>超时异常：<strong>'+currencies.reduce((n,r)=>n+Number(r.overdueActiveCount||0),0)+'</strong></span></div><p class="ff-desc" style="margin-top:8px;">'+esc(data.metricDefinitions?.onTimeResolutionRate||'按不可变 resolve 事件统计')+'；平均耗时从批次导入时间起算，不代表员工实际处理净耗时。</p>';
+    renderPerformanceTable('financeExceptionPerformanceCurrency',currencies,[
+      {key:'currencyCode',label:'币种'},{key:'activeCount',label:'活跃异常'},{key:'overdueActiveCount',label:'超时异常'},
+      {key:'overdueRatePercent',label:'超时率',format:performancePercent},{key:'resolvedEventCount',label:'解决事件'},
+      {key:'onTimeResolvedEventCount',label:'SLA 内解决事件'},{key:'onTimeResolutionRatePercent',label:'按时解决率',format:performancePercent},
+      {key:'avgImportToResolveSeconds',label:'平均导入至解决（秒）',format:v=>v===null||v===undefined?'—':Math.round(Number(v)).toString()}
+    ],'暂无币种绩效数据');
+    renderPerformanceTable('financeExceptionPerformanceAssignee',assignees,[
+      {key:'username',label:'负责人',format:v=>v||'未分配'},{key:'currencyCode',label:'币种'},{key:'activeCount',label:'活跃异常'},
+      {key:'overdueActiveCount',label:'超时异常'},{key:'overdueRatePercent',label:'超时率',format:performancePercent}
+    ],'暂无负责人数据');
+    renderPerformanceTable('financeExceptionPerformanceCategory',categories,[
+      {key:'category',label:'异常类别'},{key:'currencyCode',label:'币种'},{key:'activeCount',label:'活跃异常'},
+      {key:'overdueActiveCount',label:'超时异常'},{key:'overdueRatePercent',label:'超时率',format:performancePercent}
+    ],'暂无异常分类数据');
+  }
+  function csvCell(value) {
+    let text=String(value??'');
+    if(/^[\\s\\u0000-\\u001f]*[=+@\\-]/.test(text))text="'"+text;
+    return '"'+text.replace(/"/g,'""')+'"';
+  }
+  async function exportExceptionPerformance(slaHours) {
+    const csv = await api('/admin/financial-reconciliation/exceptions/performance-export?slaHours=' + encodeURIComponent(String(slaHours)));
+    if (typeof csv !== 'string' || !csv.startsWith('\uFEFF')) {
+      throw new Error('服务端导出响应格式无效');
+    }
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'financial-exception-performance.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function loadExceptionPerformance(exportCsv=false) {
+    if(!requirePermission())return;
+    const target=$('#financeExceptionPerformanceSummary');if(target)target.innerHTML='<div class="empty-hint">正在加载异常绩效…</div>';
+    const raw=Number($('#financeExceptionSlaHours')?.value||24),slaHours=Number.isSafeInteger(raw)&&raw>=1&&raw<=720?raw:24;
+    try{const data=await api('/admin/financial-reconciliation/exceptions/performance-summary?slaHours='+encodeURIComponent(String(slaHours)));renderExceptionPerformance(data);if(exportCsv)await exportExceptionPerformance(slaHours);}
+    catch(error){if(target)target.innerHTML='<div class="empty-hint">异常绩效加载失败</div>';toast('❌ '+(error.message||'异常绩效加载失败'));}
+  }
+
+  async function loadPerformanceExportAudit(append = false) {
+    if (!requirePermission()) return;
+    const target = $('#financePerformanceExportAudit');
+    if (!target) return;
+    if (!append) {
+      state.performanceExportAuditCursor = null;
+      state.performanceExportAuditRows = [];
+    }
+    const query = new URLSearchParams({ limit: '25' });
+    const actorId = $('#financePerformanceAuditActor')?.value.trim();
+    const from = $('#financePerformanceAuditFrom')?.value;
+    const to = $('#financePerformanceAuditTo')?.value;
+    if (actorId) query.set('actorId', actorId);
+    if (from) query.set('from', from);
+    if (to) query.set('to', to);
+    if (append && state.performanceExportAuditCursor) query.set('afterId', String(state.performanceExportAuditCursor));
+    try {
+      const result = await api('/admin/financial-reconciliation/exceptions/performance-export-audit?' + query.toString());
+      const rows = Array.isArray(result.items) ? result.items : [];
+      state.performanceExportAuditRows = append
+        ? state.performanceExportAuditRows.concat(rows)
+        : rows;
+      const body = state.performanceExportAuditRows.map(row => '<tr><td>' + Number(row.id) + '</td><td>' + esc(row.createdAt || '—') +
+        '</td><td>' + esc(row.actorUsername || '—') + '</td><td>' + Number(row.slaHours || 0) +
+        '</td><td>' + Number(row.rowCount || 0) + '</td><td>' + esc(row.format || 'csv') + '</td></tr>').join('');
+      const table = state.performanceExportAuditRows.length
+        ? '<div style="overflow:auto;"><table style="width:100%;border-collapse:collapse;"><thead><tr>' +
+          ['记录号','导出时间','操作人','SLA（小时）','导出行数','格式'].map(label => '<th style="text-align:left;padding:8px;">' + label + '</th>').join('') +
+          '</tr></thead><tbody>' + body + '</tbody></table></div>'
+        : '<div class="empty-hint">暂无导出记录</div>';
+      state.performanceExportAuditCursor = result.nextCursor || null;
+      target.innerHTML = table + (state.performanceExportAuditCursor
+        ? '<div style="margin-top:10px;"><button type="button" id="financePerformanceAuditMore">加载更多</button></div>'
+        : '');
+    } catch (error) {
+      target.innerHTML = '<div class="empty-hint">导出审计记录加载失败</div>';
+      toast('❌ ' + (error.message || '导出审计记录加载失败'));
+    }
+  }
+
+  function bind() {
+    const panel = root();
+    if (!panel || panel.dataset.bound) return;
+    panel.dataset.bound = '1';
+    panel.addEventListener('click', event => {
+      const batchButton = event.target.closest('[data-finance-batch]');
+      if (batchButton) { loadBatchItems(batchButton.dataset.financeBatch, false); return; }
+      const actionButton = event.target.closest('[data-finance-action]');
+      if (actionButton) { submitReview(actionButton); return; }
+      const historyMore = event.target.closest('[data-exception-history-more]');
+      if (historyMore) { loadExceptionHistory(historyMore, true); return; }
+      const historyButton = event.target.closest('[data-exception-history]');
+      if (historyButton) {
+        const historyTarget = $('#financeExceptionHistory-' + Number(historyButton.dataset.exceptionHistory));
+        if (historyTarget) {
+          if (historyTarget.hidden) {
+            const key = String(historyButton.dataset.exceptionHistory);
+            if (!state.exceptionHistory[key]?.loaded) loadExceptionHistory({ dataset: { item: key, batch: historyButton.dataset.batch } }, false);
+            else historyTarget.hidden = false;
+          } else historyTarget.hidden = true;
+        }
+        return;
+      }
+      const exceptionButton = event.target.closest('[data-exception-action]');
+      if (exceptionButton) { submitExceptionAction(exceptionButton); return; }
+      const alertHistory=event.target.closest('[data-sla-alert-history]');if(alertHistory){loadSlaAlertHistory(Number(alertHistory.dataset.slaAlertHistory));return;}
+      const periodButton=event.target.closest('[data-finance-period]');if(periodButton){loadPeriodSummary(periodButton.dataset.financePeriod,true);return;}
+      const alertAck=event.target.closest('[data-sla-alert-ack]');
+      if(alertAck){acknowledgeSlaAlert(alertAck);return;}
+      const alertDismiss=event.target.closest('[data-sla-alert-dismiss]');
+      if(alertDismiss){dismissSlaAlert(alertDismiss);return;}
+      const auditMore = event.target.closest('#financePerformanceAuditMore');
+      if (auditMore) { loadPerformanceExportAudit(true); return; }
+      const monthButton = event.target.closest('[data-month-close-action]');
+      if (monthButton) submitMonthClose(monthButton);
+    });
+    $('#financeReloadBatches').addEventListener('click', () => loadBatches(false));
+    $('#financeBatchMore').addEventListener('click', () => loadBatches(true));
+    $('#financeRowsMore').addEventListener('click', () => loadBatchItems(state.batchId, true));
+    $('#financeImportButton').addEventListener('click', importBatch);
+    $('#financeReportRun').addEventListener('click', loadDailySummary);
+    $('#financeExportDaily').addEventListener('click', () => loadDailySummary(true));
+    $('#financeExceptionReload').addEventListener('click', () => loadExceptionQueue(false));
+    $('#financeExceptionOpsReload').addEventListener('click', loadExceptionOperations);
+    $('#financeExceptionPerformanceReload').addEventListener('click', () => loadExceptionPerformance());
+    $('#financeExceptionPerformanceExport').addEventListener('click', () => loadExceptionPerformance(true));
+    $('#financePerformanceAuditReload')?.addEventListener('click', () => loadPerformanceExportAudit(false));
+    $('#financeSlaAlertGenerate').addEventListener('click',generateSlaAlerts);
+    $('#financeSlaAlertReload').addEventListener('click',loadSlaAlerts);
+    $('#financeSlaAlertStatus')?.addEventListener('change',loadSlaAlerts);
+    $('#financeReportLast7').addEventListener('click',()=>setReportRange('week'));
+    $('#financeReportLast30').addEventListener('click',()=>setReportRange('month'));
+    $('#financeReportThisMonth').addEventListener('click',()=>setReportRange('calendar-month'));
+    $('#financeExceptionSlaHours').addEventListener('change', loadExceptionOperations);
+    $('#financeExceptionMore').addEventListener('click', () => loadExceptionQueue(true));
+    $('#financeExceptionCategory').addEventListener('change', () => loadExceptionQueue(false));
+    $('#financeExceptionStatus').addEventListener('change', () => loadExceptionQueue(false));
+    $('#financeCloseReload').addEventListener('click', loadMonthlyClose);
+    $('#financeCloseMonth').addEventListener('change', loadMonthlyClose);
+    $('#financeCloseCurrency').addEventListener('change', () => { state.monthCurrency = $('#financeCloseCurrency').value; loadMonthPeriod(); });
+    $('#financeCloseHistoryMore').addEventListener('click', loadMonthHistory);
+  }
+  async function loadFinancialReconciliation() {
+    if (!requirePermission()) return;
+    bind();
+    const today = dateValue(new Date());
+    const from = $('#financeReportFrom');
+    const to = $('#financeReportTo');
+    if (from && !from.value) from.value = today;
+    if (to && !to.value) to.value = today;
+    await Promise.all([loadBatches(false), loadExceptionQueue(false), loadExceptionOperations(), loadExceptionPerformance(), loadPerformanceExportAudit(false), loadSlaAlerts(), loadDailySummary(), loadMonthlyClose()]);
+  }
+  window.loadFinancialReconciliation = loadFinancialReconciliation;
+})();
+
