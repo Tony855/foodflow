@@ -75,7 +75,7 @@ app.post('/api/orders/:id/transfer', requireAdminOrWaiter, requireOrderTransferA
     );
     if (!initialOrder) return res.status(404).json({ error: '订单不存在' });
     if (!initialOrder.table_name || initialOrder.table_name === targetTable) {
-      return res.status(400).json({ error: '目标桌与当前桌相同或当前座号无效' });
+      return res.status(400).json({ error: '目标座号与当前座号相同或当前座号无效' });
     }
 
     let oldTable = '';
@@ -525,7 +525,7 @@ app.post('/api/orders', async (req, res) => {
           [table, finalStoreId]
         );
         if (!lockedTable) {
-          throw Object.assign(new Error('座号已不存在，请重新扫码或刷新桌台'), { status: 404 });
+          throw Object.assign(new Error('座号已不存在，请重新扫码或刷新座号'), { status: 404 });
         }
         const activeStore = await getAsync(
           'SELECT s.id FROM stores s JOIN merchants m ON m.id=s.merchant_id WHERE s.id=? AND s.active=1 AND m.status=1',
