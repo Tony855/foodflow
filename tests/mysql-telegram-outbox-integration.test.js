@@ -225,7 +225,7 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   await enqueueTelegramNotification({ ...input, eventKey: workerKey });
   const result = await processTelegramNotificationBatch({
     workerId: workerB, limit: 1,
-    resolveRecipient: async () => ({ scope: 'system_admin', merchantId: null, storeId: null, token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', chatId: '-100123' }),
+    resolveRecipient: async () => ({ scope: 'merchant_store', merchantId: 7, storeId: 9, token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', chatId: '-100123' }),
     sendMessage: async ({ text }) => { assert.match(text, /IT-42/); return { messageId: 67890 }; }
   });
   assert.equal(result.length, 1);
@@ -236,7 +236,7 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   await enqueueTelegramNotification({ ...input, eventKey: uncertainKey });
   const uncertainResult = await processTelegramNotificationBatch({
     workerId: workerA, limit: 1,
-    resolveRecipient: async () => ({ scope: 'system_admin', merchantId: null, storeId: null, token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', chatId: '-100123' }),
+    resolveRecipient: async () => ({ scope: 'merchant_store', merchantId: 7, storeId: 9, token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', chatId: '-100123' }),
     sendMessage: async () => { throw Object.assign(new Error('network timeout'), { deliveryUncertain: true }); }
   });
   assert.equal(uncertainResult[0].state, 'uncertain');
