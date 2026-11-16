@@ -63,6 +63,7 @@ test('configuration read masks tokens and never returns plaintext credentials', 
   assert.equal(res.body.client.enabled, true);
   assert.equal(res.body.client.chat_id, '-100123');
   assert.equal(res.body.client.token_masked, '••••••••' + token.slice(-4));
+  assert.equal(Object.hasOwn(res.body.admin, 'chat_id'), false);
   assert.equal(JSON.stringify(res.body).includes(token), false);
   assert.equal(res.headers['Cache-Control'], 'no-store, private');
 });
@@ -138,7 +139,6 @@ test('disabling Admin Bot terminally suppresses global and store notices but pre
     telegram_client_chat_id: '-100123',
     telegram_admin_bot_enabled: '1',
     telegram_admin_bot_token: token,
-    telegram_admin_chat_id: '12345'
   });
   const res = response();
   await ctx.routes.get('PUT /api/super/telegram/config')({
@@ -167,7 +167,7 @@ test('test endpoint sends only for enabled, saved bot configuration', async () =
   let request;
   global.fetch = async (url, options) => {
     request = { url, options };
-    return { ok: true, status: 200, json: async () => ({ ok: true, result: { message_id: 22 } }) };
+    return { ok: true, status: 200, json: async () => ({ ok: true, result: { is_bot: true, username: 'foodflow_test_bot' } }) };
   };
   try {
     const res = response();
