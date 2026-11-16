@@ -193,8 +193,7 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   });
   assert.equal(result.length, 1);
   assert.equal(result[0].state, 'delivered');
-
-
+  assert.equal(Number((await getAsync('SELECT telegram_message_id FROM telegram_notification_outbox WHERE event_key=?', [workerKey])).telegram_message_id), 67890);
 
   const uncertainKey = `${key}:uncertain-send`;
   await enqueueTelegramNotification({ ...input, eventKey: uncertainKey });
