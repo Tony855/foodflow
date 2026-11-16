@@ -47,6 +47,20 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   await runAsync('DROP TABLE IF EXISTS telegram_notification_outbox');
   await ensureTelegramNotificationOutboxSchema({ runAsync, getAsync });
   await ensureTelegramNotificationOutboxSchema({ runAsync, getAsync });
+  // Simulate the previous global event_key index and verify an in-place upgrade.
+  await runAsync('ALTER TABLE telegram_notification_outbox DROP INDEX uq_telegram_outbox_scoped_event');
+  await runAsync('ALTER TABLE telegram_notification_outbox ADD UNIQUE KEY uq_telegram_outbox_event (event_key)');
+  await ensureTelegramNotificationOutboxSchema({ runAsync, getAsync });
+  const scopedDedupeIndex = await getAsync(
+    'SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=?',
+    ['telegram_notification_outbox', 'uq_telegram_outbox_scoped_event']
+  );
+  const legacyDedupeIndex = await getAsync(
+    'SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=?',
+    ['telegram_notification_outbox', 'uq_telegram_outbox_event']
+  );
+  assert.ok(scopedDedupeIndex, 'migration must create the tenant-scoped unique index');
+  assert.equal(legacyDedupeIndex, null, 'migration must remove the former global unique index');
   // Upgrade a pre-existing outbox table using the old state enum and no message receipt column.
   await runAsync("ALTER TABLE telegram_notification_outbox MODIFY COLUMN state ENUM('pending','processing','delivered','dead') NOT NULL DEFAULT 'pending'");
   await runAsync('ALTER TABLE telegram_notification_outbox DROP COLUMN telegram_message_id');
@@ -112,7 +126,7 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
 
   const key = `telegram-it:${crypto.randomUUID()}`;
   const input = {
-    eventKey: key, recipientScope: 'system_admin', recipientKey: 'admin:primary',
+    eventKey: key, recipientScope: 'merchant_store', recipientKey: 'store:9', merchantId: 7, storeId: 9,
     event: { type: 'order.created', storeName: 'Integration Store', orderNo: 'IT-42', amount: 12.5, currency: 'USD', customerToken: 'must-not-persist' }
   };
 
@@ -127,6 +141,23 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   assert.equal(first.id > 0, true);
   assert.equal(duplicate.id, first.id);
   assert.equal(Number((await getAsync('SELECT COUNT(*) AS total FROM telegram_notification_outbox WHERE event_key=?', [key])).total), 1);
+
+  // The same business event key may be reused safely across tenant stores,
+  // notification types, and recipient scopes without cross-tenant suppression.
+  const otherStore = await enqueueTelegramNotification({
+    ...input, merchantId: 8, storeId: 10, recipientKey: 'store:10'
+  });
+  assert.notEqual(otherStore.id, first.id);
+  const otherType = await enqueueTelegramNotification({
+    ...input,
+    event: { type: 'order.settled', storeName: 'Integration Store', orderNo: 'IT-42', amount: 12.5, currency: 'USD' }
+  });
+  assert.notEqual(otherType.id, first.id);
+  const sameScopeDuplicate = await enqueueTelegramNotification(input);
+  assert.equal(sameScopeDuplicate.id, first.id);
+  // Keep the following lease/concurrency assertions isolated from these
+  // additional dedupe fixtures.
+  await runAsync("UPDATE telegram_notification_outbox SET state='dead', last_error_code='event_disabled', updated_at=UTC_TIMESTAMP(3) WHERE id IN (?, ?)", [otherStore.id, otherType.id]);
   const stored = await getAsync('SELECT payload_json,state,attempts FROM telegram_notification_outbox WHERE id=?', [first.id]);
   assert.equal(String(stored.payload_json).includes('must-not-persist'), false);
 
@@ -181,7 +212,7 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   await enqueueTelegramNotification({ ...input, eventKey: floodKey });
   const floodResult = await processTelegramNotificationBatch({
     workerId: workerB, limit: 1,
-    resolveRecipient: async () => ({ scope: 'system_admin', merchantId: null, storeId: null, token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', chatId: '-100123' }),
+    resolveRecipient: async () => ({ scope: 'merchant_store', merchantId: 7, storeId: 9, token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', chatId: '-100123' }),
     sendMessage: async () => { throw Object.assign(new Error('Telegram 消息发送失败（HTTP 429）'), { retryAfterSeconds: 120 }); }
   });
   assert.equal(floodResult[0].state, 'retry');
@@ -194,7 +225,7 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   await enqueueTelegramNotification({ ...input, eventKey: workerKey });
   const result = await processTelegramNotificationBatch({
     workerId: workerB, limit: 1,
-    resolveRecipient: async () => ({ scope: 'system_admin', merchantId: null, storeId: null, token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', chatId: '-100123' }),
+    resolveRecipient: async () => ({ scope: 'merchant_store', merchantId: 7, storeId: 9, token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', chatId: '-100123' }),
     sendMessage: async ({ text }) => { assert.match(text, /IT-42/); return { messageId: 67890 }; }
   });
   assert.equal(result.length, 1);
@@ -205,7 +236,7 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   await enqueueTelegramNotification({ ...input, eventKey: uncertainKey });
   const uncertainResult = await processTelegramNotificationBatch({
     workerId: workerA, limit: 1,
-    resolveRecipient: async () => ({ scope: 'system_admin', merchantId: null, storeId: null, token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', chatId: '-100123' }),
+    resolveRecipient: async () => ({ scope: 'merchant_store', merchantId: 7, storeId: 9, token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', chatId: '-100123' }),
     sendMessage: async () => { throw Object.assign(new Error('network timeout'), { deliveryUncertain: true }); }
   });
   assert.equal(uncertainResult[0].state, 'uncertain');

@@ -6,33 +6,12 @@ const { createTelegramNotificationRecipientResolver } = require('../server/servi
 
 const token = '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi';
 
-function settings(enabled = '1', botToken = token, chatId = '-100123') {
-  return [
-    { key: 'telegram_admin_bot_enabled', value: enabled },
-    { key: 'telegram_admin_bot_token', value: botToken },
-    { key: 'telegram_admin_chat_id', value: chatId }
-  ];
-}
-
-test('system admin recipient resolver returns only the explicitly enabled global admin Bot', async () => {
-  const resolve = createTelegramNotificationRecipientResolver({ allAsync: async () => settings() });
-  const recipient = await resolve({ scope: 'system_admin', key: 'admin:primary', merchantId: null, storeId: null });
-  assert.deepEqual(recipient, { scope: 'system_admin', merchantId: null, storeId: null, token, chatId: '-100123' });
-});
-
-test('system admin recipient resolver fails closed for disabled or malformed configuration', async () => {
-  const disabled = createTelegramNotificationRecipientResolver({ allAsync: async () => settings('0') });
-  const malformed = createTelegramNotificationRecipientResolver({ allAsync: async () => settings('1', 'not-a-token') });
-  assert.deepEqual(await disabled({ scope: 'system_admin', key: 'admin:primary' }), { scope: 'system_admin', merchantId: null, storeId: null, suppressed: true });
-  assert.equal(await malformed({ scope: 'system_admin', key: 'admin:primary' }), null);
-});
-
-test('system admin recipient resolver refuses customer scope and mismatched tenant metadata', async () => {
+test('legacy system admin notifications are suppressed and mismatched tenant metadata is rejected', async () => {
   let calls = 0;
-  const resolve = createTelegramNotificationRecipientResolver({ allAsync: async () => { calls++; return settings(); } });
+  const resolve = createTelegramNotificationRecipientResolver({ allAsync: async () => { calls++; return []; } });
   assert.equal(await resolve({ scope: 'customer', key: 'binding:1' }), null);
   assert.equal(await resolve({ scope: 'merchant_store', key: 'store:1', merchantId: 1, storeId: 2 }), null);
-  assert.equal(await resolve({ scope: 'system_admin', key: 'admin:primary', merchantId: 1, storeId: null }), null);
+  assert.deepEqual(await resolve({ scope: 'system_admin', key: 'admin:primary', merchantId: null, storeId: null }), { scope: 'system_admin', merchantId: null, storeId: null, suppressed: true });
   assert.equal(calls, 0);
 });
 
@@ -48,6 +27,27 @@ test('merchant store recipient resolver requires exact active tenant, configured
   assert.match(calls[0].sql, /r\.notify_order_created AS event_enabled/);
   assert.deepEqual(calls[0].params, [7, 9]);
   assert.deepEqual(calls[1].params, ['telegram_admin_bot_enabled', 'telegram_admin_bot_token']);
+});
+
+test('merchant store recipient resolver isolates Chat IDs between stores', async () => {
+  const lookups = [];
+  const chats = new Map([[9, '-1009000000009'], [10, '-1009000000010']]);
+  const resolve = createTelegramNotificationRecipientResolver({ allAsync: async (sql, params) => {
+    if (sql.includes('telegram_store_admin_recipients')) {
+      lookups.push(params);
+      return [{ chat_id: chats.get(Number(params[1])), is_enabled: 1, event_enabled: 1 }];
+    }
+    return [{ key: 'telegram_admin_bot_enabled', value: '1' }, { key: 'telegram_admin_bot_token', value: token }];
+  } });
+
+  const storeA = await resolve({ scope: 'merchant_store', key: 'store:9', merchantId: 7, storeId: 9, eventType: 'order.created' });
+  const storeB = await resolve({ scope: 'merchant_store', key: 'store:10', merchantId: 7, storeId: 10, eventType: 'order.created' });
+
+  assert.equal(storeA.chatId, '-1009000000009');
+  assert.equal(storeB.chatId, '-1009000000010');
+  assert.deepEqual(lookups, [[7, 9], [7, 10]]);
+  assert.equal(storeA.storeId, 9);
+  assert.equal(storeB.storeId, 10);
 });
 
 test('merchant store recipient resolver fails closed for disabled Bot or missing recipient', async () => {

@@ -2,22 +2,13 @@
 
 const { validateBotToken, validateChatId } = require('./telegram-bot');
 
-const SYSTEM_ADMIN_RECIPIENT_KEY = 'admin:primary';
-
 function createTelegramNotificationRecipientResolver({ allAsync }) {
   if (typeof allAsync !== 'function') throw new TypeError('allAsync is required');
   return async function resolveTelegramNotificationRecipient({ scope, key, merchantId, storeId, eventType } = {}) {
-    if (scope === 'system_admin' && key === SYSTEM_ADMIN_RECIPIENT_KEY && merchantId == null && storeId == null) {
-      const keys = ['telegram_admin_bot_enabled', 'telegram_admin_bot_token', 'telegram_admin_chat_id'];
-      const rows = await allAsync('SELECT `key`, value FROM settings WHERE `key` IN (?, ?, ?)', keys);
-      const stored = Object.fromEntries((Array.isArray(rows) ? rows : []).map(row => [row.key, row.value]));
-      const token = String(stored.telegram_admin_bot_token || '');
-      const chatId = String(stored.telegram_admin_chat_id || '');
-      if (stored.telegram_admin_bot_enabled !== '1') {
-        return { scope: 'system_admin', merchantId: null, storeId: null, suppressed: true };
-      }
-      if (!validateBotToken(token) || !validateChatId(chatId)) return null;
-      return { scope: 'system_admin', merchantId: null, storeId: null, token, chatId };
+    // Legacy queued system_admin jobs are suppressed permanently. Business
+    // notifications are delivered only to the configured store Chat ID.
+    if (scope === 'system_admin') {
+      return { scope: 'system_admin', merchantId: null, storeId: null, suppressed: true };
     }
     if (scope === 'merchant_store' && typeof key === 'string' && /^store:[1-9]\d{0,18}$/.test(key)) {
       const tenantMerchantId = Number(merchantId);
@@ -78,4 +69,4 @@ function createTelegramNotificationRecipientResolver({ allAsync }) {
   };
 }
 
-module.exports = { SYSTEM_ADMIN_RECIPIENT_KEY, createTelegramNotificationRecipientResolver };
+module.exports = { createTelegramNotificationRecipientResolver };

@@ -13,7 +13,6 @@ test('Telegram diagnostics report actionable status without exposing credentials
     if (sql.includes('FROM settings')) return [
       { key: 'telegram_admin_bot_enabled', value: '1' },
       { key: 'telegram_admin_bot_token', value: adminToken },
-      { key: 'telegram_admin_chat_id', value: '-1001234567890' },
       { key: 'telegram_client_bot_enabled', value: '1' },
       { key: 'telegram_client_bot_token', value: clientToken },
       { key: 'telegram_client_chat_id', value: '123456789' }
@@ -51,7 +50,8 @@ test('Telegram diagnostics report actionable status without exposing credentials
 
   assert.equal(report.worker.enabled, true);
   assert.equal(report.webhookSecret.configured, true);
-  assert.equal(report.bots.admin.globalChatConfigured, true);
+  assert.equal(report.bots.admin.businessRecipientMode, 'store_chat_id_only');
+  assert.equal(Object.hasOwn(report.bots.admin, 'globalChatConfigured'), false);
   assert.equal(report.customerBindings.active, 2);
   assert.equal(report.storeRecipients.enabled, 3);
   assert.equal(report.outbox.groups[0].total, 2);

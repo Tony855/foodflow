@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const { hashSessionToken } = require('../server/services/session-token');
 const { toMoneyCents, hasActiveKhqr } = require('../server/services/order-financial');
 const { isValidRefundIdempotencyKey, createRefundRequestHash, calculateRefundAllocation } = require('../server/services/refund-financial');
-const { enqueueSystemAdminTelegramNotification, enqueueCustomerTelegramNotification, enqueueStoreAdminTelegramNotification } = require('../server/services/telegram-notification-enqueue');
+const { enqueueCustomerTelegramNotification, enqueueStoreAdminTelegramNotification } = require('../server/services/telegram-notification-enqueue');
 const { hashPassword, needsRehash } = require('../server/middleware/password');
 const { safeErrorMetadata } = require('../server/middleware/safe-error-metadata');
  
@@ -343,11 +343,6 @@ app.put('/api/cashier/orders/batch-settle', requireCashier, async (req, res) => 
       }
       const store = await getAsync('SELECT name, merchant_id FROM stores WHERE id=? AND merchant_id=?', [req.storeId, req.merchantId]);
       for (const order of settlementOrders) {
-        await enqueueSystemAdminTelegramNotification({
-          getAsync,
-          eventKey: `order:${order.id}:settled`,
-          event: { type: 'order.settled', storeName: store?.name || `Store ${req.storeId}`, orderNo: order.order_no || String(order.id), amount: Number(order.total), currency: 'USD' }
-        });
         await enqueueCustomerTelegramNotification({
           allAsync,
           customerTokenHash: order.customer_token,
@@ -510,11 +505,6 @@ app.put('/api/cashier/orders/:id/settle', requireCashier, async (req, res) => {
       await runAsync('INSERT INTO audit_logs (actor_type, actor_id, actor_username, action, details, ip, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
         ['cashier', 0, req.cashier.username, 'settle_order', JSON.stringify({ order_id: id, table: settledTableName, total: lockedOrder.total, pay_method: paymentMethod, cash_received: cashReceived, cash_change: cashChange }), getClientIp(req), settledAt]);
       const store = await getAsync('SELECT name, merchant_id FROM stores WHERE id=? AND merchant_id=?', [req.storeId, req.merchantId]);
-      await enqueueSystemAdminTelegramNotification({
-        getAsync,
-        eventKey: `order:${id}:settled`,
-        event: { type: 'order.settled', storeName: store?.name || `Store ${req.storeId}`, orderNo: lockedOrder.order_no || String(id), amount: Number(lockedOrder.total), currency: 'USD' }
-      });
       await enqueueCustomerTelegramNotification({
         allAsync,
         customerTokenHash: lockedOrder.customer_token,
@@ -752,11 +742,6 @@ app.put('/api/cashier/orders/:id/refund', requireCashier, async (req, res) => {
       if (!savedRequest.affectedRows) throw new Error('退款结果保存失败，操作已回滚');
       const store = await getAsync('SELECT name, merchant_id FROM stores WHERE id=? AND merchant_id=?', [req.storeId, req.merchantId]);
       const refundKey = crypto.createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 24);
-      await enqueueSystemAdminTelegramNotification({
-        getAsync,
-        eventKey: `order:${id}:refunded:${refundKey}`,
-        event: { type: 'order.refunded', storeName: store?.name || `Store ${req.storeId}`, orderNo: lockedOrder.order_no || String(id), refundAmount, currency: 'USD' }
-      });
       await enqueueCustomerTelegramNotification({
         allAsync,
         customerTokenHash: lockedOrder.customer_token,
