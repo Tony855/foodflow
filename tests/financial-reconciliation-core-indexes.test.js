@@ -38,6 +38,20 @@ function indexRows(name, columns, nonUnique = 0) {
   }));
 }
 
+const reviewEventTypes = {
+  id: 'bigint(20)',
+  actor_username: 'varchar(100)',
+  action: "enum('confirm','reject','release','reassign','classify_exception')",
+  reason: 'varchar(500)',
+  idempotency_key: 'varchar(128)',
+  request_sha256: 'char(64)',
+  before_json: 'json',
+  after_json: 'json',
+  previous_hash: 'char(64)',
+  event_hash: 'char(64)',
+  created_at: 'datetime(3)'
+};
+
 function fixture({ indexes = {}, duplicates = {}, overrides = {} } = {}) {
   const current = Object.fromEntries(Object.entries(indexes).map(([table, rows]) => [table, rows.map(row => ({ ...row }))]));
   const reads = [];
@@ -51,6 +65,12 @@ function fixture({ indexes = {}, duplicates = {}, overrides = {} } = {}) {
       const names = overrides[table] || schemas[table];
       return names.map(Field => ({
         Field,
+        Type: overrides[table + ':type']?.[Field] ||
+          (table === 'financial_reconciliation_review_events' ? reviewEventTypes[Field] : 'varchar(255)'),
+        Key: table === 'financial_reconciliation_review_events' && Field === 'id'
+          ? (overrides[table + ':key'] ?? 'PRI') : '',
+        Extra: table === 'financial_reconciliation_review_events' && Field === 'id'
+          ? (overrides[table + ':extra'] ?? 'auto_increment') : '',
         Null: overrides[table + ':nullable']?.includes(Field) ? 'YES' :
           (overrides[table + ':notNullable']?.includes(Field) ? 'NO' : (notNull.has(Field) ? 'NO' : 'YES'))
       }));
@@ -137,5 +157,59 @@ test('fails closed when an existing review idempotency index has drifted', async
     indexRows('unique_finance_review_idempotency', ['store_id','merchant_id','batch_id','idempotency_key']) };
   const db = fixture({ indexes: drifted });
   await assert.rejects(db.run(), error => error.code === 'FINANCE_SCHEMA_INDEX_DRIFT');
+  assert.deepEqual(db.writes, []);
+});
+
+
+test('fails closed on undersized immutable audit and idempotency columns before adding indexes', async () => {
+  const db = fixture({ overrides: {
+    'financial_reconciliation_review_events:type': {
+      actor_username: 'varchar(32)',
+      reason: 'varchar(100)',
+      idempotency_key: 'varchar(64)',
+      request_sha256: 'char(32)',
+      before_json: 'varchar(255)',
+      after_json: 'varchar(255)',
+      previous_hash: 'char(32)',
+      event_hash: 'char(32)'
+    }
+  }});
+  await assert.rejects(db.run(), error => error.code === 'FINANCE_REVIEW_EVENT_SCHEMA_TYPE_DRIFT');
+  assert.deepEqual(db.writes, []);
+});
+
+test('requires all supported review actions in legacy enum columns', async () => {
+  const db = fixture({ overrides: {
+    'financial_reconciliation_review_events:type': {
+      action: "enum('confirm','reject','release','reassign')"
+    }
+  }});
+  await assert.rejects(db.run(), error => error.code === 'FINANCE_REVIEW_EVENT_SCHEMA_TYPE_DRIFT');
+  assert.deepEqual(db.writes, []);
+});
+
+test('requires an auto-increment primary key for immutable review event ordering', async () => {
+  const db = fixture({ overrides: {
+    'financial_reconciliation_review_events:key': '',
+    'financial_reconciliation_review_events:extra': ''
+  }});
+  await assert.rejects(db.run(), error => error.code === 'FINANCE_REVIEW_EVENT_SCHEMA_TYPE_DRIFT');
+  assert.deepEqual(db.writes, []);
+});
+
+test('accepts MariaDB JSON alias storage and full-width legacy text columns', async () => {
+  const db = fixture({ indexes: expectedIndexes, overrides: {
+    'financial_reconciliation_review_events:type': {
+      before_json: 'longtext',
+      after_json: 'longtext',
+      reason: 'text',
+      actor_username: 'text',
+      idempotency_key: 'text',
+      request_sha256: 'char(64)',
+      previous_hash: 'char(64)',
+      event_hash: 'char(64)'
+    }
+  }});
+  await db.run();
   assert.deepEqual(db.writes, []);
 });
