@@ -7,7 +7,7 @@ const QRCode = require('qrcode');
 const { parsePositiveRouteId } = require('../server/services/route-id');
 const { safeErrorMetadata } = require('../server/middleware/safe-error-metadata');
 const { replaceAdminStoreAccess, normalizeStoreIds, assertActorCanAssignStores, assertAdminStoreAssignment, assertTargetAdminInActorScope } = require('../server/services/admin-store-access');
-const { enqueueSystemAdminTelegramNotification, enqueueCustomerTelegramNotification, enqueueStoreAdminTelegramNotification } = require('../server/services/telegram-notification-enqueue');
+const { enqueueCustomerTelegramNotification, enqueueStoreAdminTelegramNotification } = require('../server/services/telegram-notification-enqueue');
 
 function normalizeAdminFlag(value, fallback, field) {
   if (value === undefined) return fallback;
@@ -1157,11 +1157,6 @@ module.exports = function(app, deps) {
         await runAsync('INSERT INTO audit_logs (actor_type, actor_id, actor_username, action, details, ip, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
           [req.isCashier ? 'cashier' : 'admin', req.adminId || req.cashierId || 0, req.isCashier ? (req.cashier?.username || 'cashier') : 'admin', 'khqr_confirm', JSON.stringify({ order_id: orderId, pay_method: paymentMethod, cash_received: cashReceived, cash_change: cashChange }), getClientIp(req), settledAt]);
         const store = await getAsync('SELECT name, merchant_id FROM stores WHERE id=? AND merchant_id=?', [sid, req.merchantId]);
-        await enqueueSystemAdminTelegramNotification({
-          getAsync,
-          eventKey: `order:${orderId}:settled`,
-          event: { type: 'order.settled', storeName: store?.name || `Store ${sid}`, orderNo: lockedOrder.order_no || String(orderId), amount: Number(lockedOrder.total), currency: 'USD' }
-        });
         await enqueueCustomerTelegramNotification({
           allAsync,
           customerTokenHash: lockedOrder.customer_token,
