@@ -18,10 +18,6 @@ async function claimTelegramNotifications({ workerId = randomUUID(), limit = 10,
   if (!Number.isInteger(limit) || limit < 1 || limit > 50) throw new TypeError('领取数量无效');
   if (!Number.isInteger(leaseSeconds) || leaseSeconds < 15 || leaseSeconds > 600) throw new TypeError('租约时长无效');
   return withTransaction(async () => {
-    // Do not run a broad UPDATE before the SKIP LOCKED claim. That range
-    // update can deadlock concurrent workers even when no exhausted lease
-    // actually needs changing. Exhausted expired leases are swept separately
-    // by the bounded retention cleanup.
     const rows = await allAsync(
       'SELECT id, event_key, event_type, merchant_id, store_id, recipient_scope, recipient_key, payload_json, attempts FROM telegram_notification_outbox WHERE attempts < 8 AND available_at <= UTC_TIMESTAMP(3) AND (state=\'pending\' OR (state=\'processing\' AND locked_until < UTC_TIMESTAMP(3))) ORDER BY id LIMIT ? FOR UPDATE SKIP LOCKED',
       [limit]
@@ -55,9 +51,10 @@ async function markTelegramNotificationUncertain(id, workerId, errorCode = 'deli
 }
 
 async function markTelegramNotificationDelivered(id, workerId, messageId = null) {
+  const safeMessageId = messageId && Number.isSafeInteger(Number(messageId)) && Number(messageId) > 0 ? Number(messageId) : null;
   const result = await runAsync(
-    'UPDATE telegram_notification_outbox SET state=\'delivered\', delivered_at=UTC_TIMESTAMP(3), locked_by=NULL, locked_until=NULL, last_error_code=NULL, updated_at=UTC_TIMESTAMP(3) WHERE id=? AND state=\'processing\' AND locked_by=? AND locked_until >= UTC_TIMESTAMP(3)',
-    [positiveId(id, '通知任务编号'), workerId]
+    "UPDATE telegram_notification_outbox SET state='delivered', delivered_at=UTC_TIMESTAMP(3), telegram_message_id=?, locked_by=NULL, locked_until=NULL, last_error_code=NULL, updated_at=UTC_TIMESTAMP(3) WHERE id=? AND state='sending' AND locked_by=? AND locked_until >= UTC_TIMESTAMP(3)",
+    [safeMessageId, positiveId(id, '通知任务编号'), workerId]
   );
   return Number(result.affectedRows) === 1;
 }
@@ -66,23 +63,17 @@ async function releaseTelegramNotificationForRetry(id, workerId, errorCode, atte
   const safeCode = SAFE_ERROR_CODES.has(errorCode) ? errorCode : 'unknown';
   const taskId = positiveId(id, '通知任务编号');
   if (!Number.isInteger(attempt) || attempt < 1 || attempt > 8) throw new TypeError('重试次数无效');
-  if (safeCode === 'event_disabled' || safeCode === 'binding_revoked') {
+  const ownedStates = "state IN ('processing','sending')";
+  if (safeCode === 'event_disabled' || safeCode === 'binding_revoked' || attempt >= 8) {
     const result = await runAsync(
-      "UPDATE telegram_notification_outbox SET state='dead', locked_by=NULL, locked_until=NULL, last_error_code=?, updated_at=UTC_TIMESTAMP(3) WHERE id=? AND state='processing' AND locked_by=? AND locked_until >= UTC_TIMESTAMP(3)",
-      [safeCode, taskId, workerId]
-    );
-    return Number(result.affectedRows) === 1;
-  }
-  if (attempt >= 8) {
-    const result = await runAsync(
-      'UPDATE telegram_notification_outbox SET state=\'dead\', locked_by=NULL, locked_until=NULL, last_error_code=?, updated_at=UTC_TIMESTAMP(3) WHERE id=? AND state=\'processing\' AND locked_by=? AND locked_until >= UTC_TIMESTAMP(3)',
+      "UPDATE telegram_notification_outbox SET state='dead', locked_by=NULL, locked_until=NULL, last_error_code=?, updated_at=UTC_TIMESTAMP(3) WHERE id=? AND " + ownedStates + " AND locked_by=? AND locked_until >= UTC_TIMESTAMP(3)",
       [safeCode, taskId, workerId]
     );
     return Number(result.affectedRows) === 1;
   }
   const delay = retryDelaySeconds(attempt, Number.isInteger(retryAfterSeconds) && retryAfterSeconds > 0 ? Math.min(retryAfterSeconds, 3600) : 0);
   const result = await runAsync(
-    'UPDATE telegram_notification_outbox SET state=\'pending\', available_at=DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? SECOND), locked_by=NULL, locked_until=NULL, last_error_code=?, updated_at=UTC_TIMESTAMP(3) WHERE id=? AND state=\'processing\' AND locked_by=? AND locked_until >= UTC_TIMESTAMP(3)',
+    "UPDATE telegram_notification_outbox SET state='pending', available_at=DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? SECOND), locked_by=NULL, locked_until=NULL, last_error_code=?, updated_at=UTC_TIMESTAMP(3) WHERE id=? AND " + ownedStates + " AND locked_by=? AND locked_until >= UTC_TIMESTAMP(3)",
     [delay, safeCode, taskId, workerId]
   );
   return Number(result.affectedRows) === 1;
@@ -90,7 +81,7 @@ async function releaseTelegramNotificationForRetry(id, workerId, errorCode, atte
 
 async function cleanupTelegramNotificationHistory({ deliveredRetentionDays = 90, deadRetentionDays = 180, batchSize = 1000 } = {}) {
   if (!Number.isInteger(deliveredRetentionDays) || deliveredRetentionDays < 30 || deliveredRetentionDays > 3650) throw new TypeError('Delivered retention is invalid');
-  if (!Number.isInteger(deadRetentionDays) || deadRetentionDays < 30 || deadRetentionDays > 3650) throw new TypeError('Dead-letter retention is invalid');
+  if (!Number.isInteger(deadRetentionDays) || deadRetentionDays < 30 || deadRetentionDays > 3650) throw new TypeError('Dead retention is invalid');
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 5000) throw new TypeError('Cleanup batch size is invalid');
   const expiredSending = await withTransaction(async () => {
     const rows = await allAsync(
@@ -128,7 +119,7 @@ async function cleanupTelegramNotificationHistory({ deliveredRetentionDays = 90,
     "DELETE FROM telegram_notification_outbox WHERE state='dead' AND updated_at < DATE_SUB(UTC_TIMESTAMP(3), INTERVAL ? DAY) LIMIT ?",
     [deadRetentionDays, batchSize]
   );
-  return { expiredSending, exhaustedDead: Number(exhaustedDead) || 0, deliveredDeleted: Number(delivered.affectedRows) || 0, deadDeleted: Number(dead.affectedRows) || 0 };
+  return { expiredSending, exhaustedDead, deliveredDeleted: Number(delivered.affectedRows) || 0, deadDeleted: Number(dead.affectedRows) || 0 };
 }
 
 module.exports = { enqueueTelegramNotification, claimTelegramNotifications, markTelegramNotificationSending, markTelegramNotificationUncertain, markTelegramNotificationDelivered, releaseTelegramNotificationForRetry, cleanupTelegramNotificationHistory };
