@@ -49,9 +49,9 @@ app.post('/api/tables', requireAdminKey, requirePermission('can_manage_table'), 
     if (!Number.isSafeInteger(storeId) || storeId <= 0 || !Number.isSafeInteger(merchantId) || merchantId <= 0) {
       return res.status(400).json({ error: '店铺或商户信息无效' });
     }
-    if (!name || name.length > 50) return res.status(400).json({ error: '桌号名称必须为 1 至 50 个字符' });
+    if (!name || name.length > 50) return res.status(400).json({ error: '座号名称必须为 1 至 50 个字符' });
     if (!['available', 'occupied', 'reserved'].includes(status)) {
-      return res.status(400).json({ error: '无效的桌号状态' });
+      return res.status(400).json({ error: '无效的座号状态' });
     }
 
     const newTable = await withTransaction(async () => {
@@ -66,7 +66,7 @@ app.post('/api/tables', requireAdminKey, requirePermission('can_manage_table'), 
     });
     res.status(201).json(newTable);
   } catch (e) {
-    if (e && e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: '该桌号名称已存在' });
+    if (e && e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: '该座号名称已存在' });
     res.status(e.status || 500).json({ error: e.status ? e.message : '创建桌台失败' });
   }
 });
@@ -197,14 +197,14 @@ app.put('/api/tables/:id', requireAdminKey, requirePermission('can_manage_table'
         'SELECT id, name, status FROM tables WHERE id=? AND store_id=? FOR UPDATE',
         [id, storeId]
       );
-      if (!existing) throw Object.assign(new Error('桌号不存在'), { status: 404 });
+      if (!existing) throw Object.assign(new Error('座号不存在'), { status: 404 });
       const newName = req.body?.name !== undefined ? String(req.body.name).trim() : existing.name;
       const newStatus = req.body?.status || existing.status;
       if (!newName || newName.length > 50) {
-        throw Object.assign(new Error('桌号名称必须为 1 至 50 个字符'), { status: 400 });
+        throw Object.assign(new Error('座号名称必须为 1 至 50 个字符'), { status: 400 });
       }
       if (!['available', 'occupied', 'reserved'].includes(newStatus)) {
-        throw Object.assign(new Error('无效的桌号状态'), { status: 400 });
+        throw Object.assign(new Error('无效的座号状态'), { status: 400 });
       }
 
       if (newName !== existing.name) {
@@ -213,7 +213,7 @@ app.put('/api/tables/:id', requireAdminKey, requirePermission('can_manage_table'
           [existing.name, storeId]
         );
         if (pendingOrders.some(hasActiveKhqr)) {
-          throw Object.assign(new Error('该桌仍有待确认或有效 KHQR 收款码，不能修改桌号'), { status: 409 });
+          throw Object.assign(new Error('该桌仍有待确认或有效 KHQR 收款码，不能修改座号'), { status: 409 });
         }
       }
       await runAsync('UPDATE tables SET name=?, status=? WHERE id=? AND store_id=?', [newName, newStatus, id, storeId]);
@@ -240,7 +240,7 @@ app.put('/api/tables/:id', requireAdminKey, requirePermission('can_manage_table'
     });
     res.json(updated);
   } catch (e) {
-    if (e && e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: '该桌号名称已存在，请换一个' });
+    if (e && e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: '该座号名称已存在，请换一个' });
     res.status(e.status || 500).json({ error: e.status ? e.message : '更新桌台失败' });
   }
 });
@@ -258,7 +258,7 @@ app.delete('/api/tables/:id', requireAdminKey, requirePermission('can_manage_tab
         'SELECT id, name FROM tables WHERE id=? AND store_id=? FOR UPDATE',
         [id, storeId]
       );
-      if (!existing) throw Object.assign(new Error('桌号不存在'), { status: 404 });
+      if (!existing) throw Object.assign(new Error('座号不存在'), { status: 404 });
 
       // Lock dependent rows before checking, so an order/call cannot be inserted
       // between the emptiness check and deleting the table.
