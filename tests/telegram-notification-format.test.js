@@ -9,9 +9,9 @@ test('formats allowlisted order events with bounded fields only', () => {
     formatTelegramBusinessNotification({
       type: 'order.created', storeName: 'Phnom Penh', orderNo: '11001',
       amount: 12.5, currency: 'USD', customerToken: 'must-not-appear',
-      note: 'private customer note'
+      note: '不要香菜、少辣'
     }),
-    '[FoodFlow] 新订单\n门店：Phnom Penh\n订单：11001\n金额：12.50 USD'
+    '[FoodFlow] 新订单\n门店：Phnom Penh\n订单：11001\n备注：不要香菜、少辣\n金额：12.50 USD'
   );
   assert.equal(
     formatTelegramBusinessNotification({
