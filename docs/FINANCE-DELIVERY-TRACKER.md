@@ -1,6 +1,6 @@
 # Finance delivery tracker
 
-Last reviewed: 2026-11-15 (main baseline includes PR #238 MariaDB LTS matrix and subsequent security hardening; no finance implementation PR is currently open)
+Last reviewed: 2026-11-16 (main baseline `c99d79eca1ec5572c8e300b8fea75c3ab320a097`; PR #290 adds review-audit column-contract validation and is under review)
 
 This tracker records merged delivery separately from work that is still under review. It is a capability inventory, not a percentage-complete estimate.
 
@@ -49,7 +49,7 @@ This tracker records merged delivery separately from work that is still under re
 
 ## Under review
 
-- No finance implementation pull requests are currently open. PR #238 has merged the supported MariaDB LTS matrix (10.11, 11.4, 11.8, 12.3) and the MariaDB locking-read fix; current finance CI coverage is MySQL 8.4 plus all four MariaDB LTS versions.
+- PR #290 is open from `fix/finance-review-audit-column-contract-20261116`; it validates immutable review-event column types/capacity on legacy databases. PR #238 has merged the supported MariaDB LTS matrix (10.11, 11.4, 11.8, 12.3) and the MariaDB locking-read fix; current finance CI coverage is MySQL 8.4 plus all four MariaDB LTS versions.
 
 ## Remaining engineering acceptance work
 
@@ -159,3 +159,12 @@ For each batch, update this tracker with the merged PR and commit, the open PR a
 - Follow-up review found that the original bank-statement batch key, statement-row key, and immutable review-event idempotency key were declared in fresh CREATE TABLE definitions but were not explicitly validated on already-existing tables.
 - Added a startup guard for `unique_reconciliation_batch`, `unique_reconciliation_row`, and `unique_finance_review_idempotency`. It also verifies InnoDB transactional engines and that immutable review records retain actor, timestamp, reason, before/after JSON, request hash, and event hash columns with the required nullability.
 - Duplicate legacy import/review keys, missing audit fields, or incompatible nullability fail closed. Existing statement rows and audit events are not rewritten or synthesized.
+
+
+## 2026-11-16 immutable review-event column contract audit
+
+- PR [#290](https://github.com/Tony855/shaolafang/pull/290) is open from `fix/finance-review-audit-column-contract-20261116`, based on main `c99d79eca1ec5572c8e300b8fea75c3ab320a097`.
+- Follow-up review found that the core reconciliation guard checked audit column presence and nullability but not minimum data capacity or supported action values. A legacy table with a short hash/reason/idempotency column, missing `classify_exception` enum value, small VARCHAR snapshot fields, or a non-auto-increment event ID could pass startup despite being unable to preserve the service's audit writes.
+- The guard now checks the event ID primary/auto-increment contract, integer tenant/actor/reference IDs, reviewer/reason/idempotency/hash capacities, the complete action and exception-category sets, and JSON-compatible snapshot storage. It accepts MySQL JSON and MariaDB LONGTEXT JSON alias storage. The idempotency key remains CHAR/VARCHAR so the required full-column unique index is possible without a prefix.
+- Type drift fails closed before any new uniqueness index is added; existing review events are neither rewritten nor synthesized. Unit and real-database tests cover undersized legacy columns, action and exception-category enum drift, non-integer scope/reference fields, invalid event IDs, MariaDB JSON alias compatibility, unindexable TEXT idempotency keys, and preservation of existing rows/indexes.
+- Code head `2220e54c0072603b521197a3c17542fb6fcaa50d` passed CI run [#43798577649](https://github.com/Tony855/shaolafang/actions/runs/43798577649) and installer matrix [#43798577480](https://github.com/Tony855/shaolafang/actions/runs/43798577480): repository suite 804 tests (778 passed, 0 failed, 26 skipped); MySQL 8.4 and MariaDB 10.11/11.4/11.8/12.3 each passed 23/23 finance integration tests; each database matrix also passed session-token migration, backup/restore, and Telegram outbox integration; installer matrix passed 5/5 targets. This tracker-only follow-up changes the PR head, so the exact final head must be revalidated before merge. No production migration, deployment, or financial operation is performed in this batch.

@@ -3111,3 +3111,76 @@ test('MySQL integration: core reconciliation import and review indexes repair po
   await runAsync('ALTER TABLE financial_reconciliation_review_events MODIFY COLUMN idempotency_key VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL');
   await ensureFinancialReconciliationCoreIndexes({ runAsync, allAsync });
 });
+
+
+test('MySQL integration: legacy review audit type drift fails closed without rewriting events', {
+  skip: !databaseUrl ? 'MYSQL_INTEGRATION_URL is not configured' : false,
+  timeout: 30000
+}, async t => {
+  const { connection, runAsync, allAsync } = await connectTestDatabase();
+  const tables = [
+    'financial_reconciliation_review_events',
+    'financial_reconciliation_items',
+    'financial_reconciliation_batches'
+  ];
+  const dropTables = async () => {
+    for (const table of tables) await runAsync('DROP TABLE IF EXISTS ' + table);
+  };
+  await dropTables();
+  t.after(async () => {
+    try { await dropTables(); }
+    finally { await connection.end(); }
+  });
+
+  await runAsync(`CREATE TABLE financial_reconciliation_batches (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    merchant_id INT NOT NULL, store_id INT NOT NULL,
+    provider_code VARCHAR(40) NOT NULL, external_batch_id VARCHAR(191) NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await runAsync(`CREATE TABLE financial_reconciliation_items (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    batch_id BIGINT NOT NULL, row_no INT NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await runAsync(`CREATE TABLE financial_reconciliation_review_events (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    merchant_id INT NOT NULL, store_id INT NOT NULL, batch_id BIGINT NOT NULL, item_id BIGINT NOT NULL,
+    journal_transaction_id BIGINT DEFAULT NULL, exception_category VARCHAR(32) DEFAULT NULL,
+    actor_admin_id INT NOT NULL, actor_username VARCHAR(100) NOT NULL,
+    action ENUM('confirm','reject') NOT NULL, reason VARCHAR(100) NOT NULL,
+    idempotency_key VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    request_sha256 CHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    before_json VARCHAR(255) NOT NULL, after_json VARCHAR(255) NOT NULL,
+    previous_hash CHAR(32) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
+    event_hash CHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+
+  await runAsync(`INSERT INTO financial_reconciliation_review_events
+    (merchant_id,store_id,batch_id,item_id,actor_admin_id,actor_username,action,reason,idempotency_key,
+     request_sha256,before_json,after_json,event_hash)
+    VALUES (4,9,1,1,7,'finance-a','confirm','legacy audit retained','short-key-0001',
+      REPEAT('a',32),'{}','{}',REPEAT('b',32))`);
+
+  await assert.rejects(
+    ensureFinancialReconciliationCoreIndexes({ runAsync, allAsync }),
+    error => error.code === 'FINANCE_REVIEW_EVENT_SCHEMA_TYPE_DRIFT'
+  );
+
+  const [auditRows] = await connection.query(
+    'SELECT reason,idempotency_key,request_sha256,before_json,after_json,event_hash FROM financial_reconciliation_review_events WHERE id=1'
+  );
+  assert.equal(auditRows.length, 1);
+  assert.equal(auditRows[0].reason, 'legacy audit retained');
+  assert.equal(auditRows[0].idempotency_key, 'short-key-0001');
+  assert.equal(auditRows[0].request_sha256, 'a'.repeat(32));
+  assert.equal(auditRows[0].event_hash, 'b'.repeat(32));
+
+  for (const table of tables) {
+    const indexes = await allAsync('SHOW INDEX FROM ' + table);
+    assert.deepEqual(
+      indexes.filter(row => row.Key_name !== 'PRIMARY'),
+      [],
+      table + ' must not receive partial uniqueness changes after audit schema rejection'
+    );
+  }
+});

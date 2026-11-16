@@ -19,10 +19,115 @@ const REVIEW_EVENT_REQUIRED_NULLABLE_COLUMNS = Object.freeze([
   'journal_transaction_id', 'exception_category', 'previous_hash'
 ]);
 
+const REVIEW_EVENT_ALLOWED_ACTIONS = Object.freeze([
+  'confirm', 'reject', 'release', 'reassign', 'classify_exception'
+]);
+
+const REVIEW_EVENT_ALLOWED_EXCEPTION_CATEGORIES = Object.freeze([
+  'refund', 'fee', 'settlement_difference', 'chargeback', 'other'
+]);
+
+const REVIEW_EVENT_COLUMN_CONTRACTS = Object.freeze({
+  id: Object.freeze({ kind: 'auto_increment_id' }),
+  merchant_id: Object.freeze({ kind: 'integer' }),
+  store_id: Object.freeze({ kind: 'integer' }),
+  batch_id: Object.freeze({ kind: 'integer' }),
+  item_id: Object.freeze({ kind: 'integer' }),
+  journal_transaction_id: Object.freeze({ kind: 'integer' }),
+  exception_category: Object.freeze({ kind: 'exception_category' }),
+  actor_admin_id: Object.freeze({ kind: 'integer' }),
+  actor_username: Object.freeze({ kind: 'string', minLength: 100 }),
+  action: Object.freeze({ kind: 'action' }),
+  reason: Object.freeze({ kind: 'string', minLength: 500 }),
+  idempotency_key: Object.freeze({ kind: 'index_string', minLength: 128 }),
+  request_sha256: Object.freeze({ kind: 'string', minLength: 64 }),
+  before_json: Object.freeze({ kind: 'json' }),
+  after_json: Object.freeze({ kind: 'json' }),
+  previous_hash: Object.freeze({ kind: 'string', minLength: 64 }),
+  event_hash: Object.freeze({ kind: 'string', minLength: 64 }),
+  created_at: Object.freeze({ kind: 'datetime' })
+});
+
+const TEXT_CAPACITY = Object.freeze({
+  tinytext: 255,
+  text: 65535,
+  mediumtext: 16777215,
+  longtext: 4294967295
+});
+
 function schemaError(code, message) {
   const error = new Error(message);
   error.code = code;
   return error;
+}
+
+function columnTypeBase(type) {
+  return String(type || '').trim().toLowerCase().match(/^([a-z]+)/)?.[1] || '';
+}
+
+function stringCapacity(type) {
+  const normalized = String(type || '').trim().toLowerCase();
+  const sized = normalized.match(/^(?:char|varchar)\s*\(\s*(\d+)\s*\)/);
+  if (sized) return Number(sized[1]);
+  return TEXT_CAPACITY[columnTypeBase(normalized)] || 0;
+}
+
+function enumValues(type) {
+  const match = String(type || '').trim().match(/^enum\s*\((.*)\)$/i);
+  if (!match) return null;
+  const values = [];
+  const pattern = /'((?:\\.|[^'])*)'/g;
+  let item;
+  while ((item = pattern.exec(match[1]))) {
+    values.push(item[1].replace(/\\'/g, "'").replace(/\\\\/g, '\\'));
+  }
+  return values;
+}
+
+function isReviewEventColumnTypeSafe(name, column, contract) {
+  const type = String(column.Type || '').trim().toLowerCase();
+  const base = columnTypeBase(type);
+  if (!type) return false;
+
+  if (contract.kind === 'integer') {
+    return /^(tinyint|smallint|mediumint|int|integer|bigint)(?:\s*\(\s*\d+\s*\))?(?:\s+unsigned)?$/i.test(type);
+  }
+
+  if (contract.kind === 'exception_category') {
+    const values = enumValues(type);
+    if (values) return REVIEW_EVENT_ALLOWED_EXCEPTION_CATEGORIES.every(category => values.includes(category));
+    return stringCapacity(type) >= Math.max(...REVIEW_EVENT_ALLOWED_EXCEPTION_CATEGORIES.map(category => category.length));
+  }
+
+  if (contract.kind === 'auto_increment_id') {
+    return /^(tinyint|smallint|mediumint|int|integer|bigint)(?:\s*\(\s*\d+\s*\))?(?:\s+unsigned)?$/i.test(type) &&
+      String(column.Key || '').toUpperCase() === 'PRI' &&
+      /(?:^|\s)auto_increment(?:\s|$)/i.test(String(column.Extra || ''));
+  }
+
+  if (contract.kind === 'string') {
+    return stringCapacity(type) >= contract.minLength;
+  }
+
+  if (contract.kind === 'index_string') {
+    return (base === 'char' || base === 'varchar') && stringCapacity(type) >= contract.minLength;
+  }
+
+  if (contract.kind === 'action') {
+    const values = enumValues(type);
+    if (values) return REVIEW_EVENT_ALLOWED_ACTIONS.every(action => values.includes(action));
+    return stringCapacity(type) >= Math.max(...REVIEW_EVENT_ALLOWED_ACTIONS.map(action => action.length));
+  }
+
+  if (contract.kind === 'json') {
+    return base === 'json' || (Object.hasOwn(TEXT_CAPACITY, base) && TEXT_CAPACITY[base] >= 65535);
+  }
+
+  if (contract.kind === 'datetime') {
+    return base === 'datetime' || base === 'timestamp';
+  }
+
+  return false;
 }
 
 async function assertReviewEventSchema(allAsync) {
@@ -54,6 +159,16 @@ async function assertReviewEventSchema(allAsync) {
     throw schemaError(
       'FINANCE_REVIEW_EVENT_SCHEMA_NULLABILITY_DRIFT',
       'financial reconciliation review optional columns must remain nullable: ' + notNullable.join(', ')
+    );
+  }
+
+  const incompatible = Object.entries(REVIEW_EVENT_COLUMN_CONTRACTS)
+    .filter(([name, contract]) => !isReviewEventColumnTypeSafe(name, byName.get(name), contract))
+    .map(([name]) => name);
+  if (incompatible.length) {
+    throw schemaError(
+      'FINANCE_REVIEW_EVENT_SCHEMA_TYPE_DRIFT',
+      'financial reconciliation review event columns have incompatible types or capacity: ' + incompatible.join(', ')
     );
   }
 }
@@ -92,7 +207,11 @@ async function ensureFinancialReconciliationCoreIndexes({ runAsync, allAsync }) 
 module.exports = {
   ensureFinancialReconciliationCoreIndexes,
   assertReviewEventSchema,
+  isReviewEventColumnTypeSafe,
   REVIEW_EVENT_REQUIRED_COLUMNS,
   REVIEW_EVENT_REQUIRED_NON_NULL_COLUMNS,
-  REVIEW_EVENT_REQUIRED_NULLABLE_COLUMNS
+  REVIEW_EVENT_REQUIRED_NULLABLE_COLUMNS,
+  REVIEW_EVENT_ALLOWED_ACTIONS,
+  REVIEW_EVENT_ALLOWED_EXCEPTION_CATEGORIES,
+  REVIEW_EVENT_COLUMN_CONTRACTS
 };
