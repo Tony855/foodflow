@@ -21,7 +21,7 @@ const OUTBOX_SCHEMA_SQL = `
     created_at DATETIME(3) NOT NULL,
     updated_at DATETIME(3) NOT NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uq_telegram_outbox_event (event_key),
+    UNIQUE KEY uq_telegram_outbox_scoped_event (event_key, event_type, recipient_scope, merchant_id, store_id),
     KEY idx_telegram_outbox_claim (state, available_at, locked_until, id),
     KEY idx_telegram_outbox_tenant (merchant_id, store_id, created_at),
     KEY idx_telegram_outbox_recipient (recipient_scope, recipient_key, state)
@@ -40,6 +40,22 @@ async function ensureTelegramNotificationOutboxSchema({ runAsync, getAsync }) {
   );
   if (!messageIdColumn) {
     await runAsync('ALTER TABLE telegram_notification_outbox ADD COLUMN telegram_message_id BIGINT UNSIGNED DEFAULT NULL AFTER delivered_at');
+  }
+
+  // Upgrade existing installations from the former global event_key unique
+  // index. The tenant + event type + recipient scope now form the dedupe scope.
+  const legacyIndex = await getAsync(
+    'SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=?',
+    ['telegram_notification_outbox', 'uq_telegram_outbox_event']
+  );
+  if (legacyIndex) await runAsync('ALTER TABLE telegram_notification_outbox DROP INDEX uq_telegram_outbox_event');
+
+  const scopedIndex = await getAsync(
+    'SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=?',
+    ['telegram_notification_outbox', 'uq_telegram_outbox_scoped_event']
+  );
+  if (!scopedIndex) {
+    await runAsync('ALTER TABLE telegram_notification_outbox ADD UNIQUE KEY uq_telegram_outbox_scoped_event (event_key, event_type, recipient_scope, merchant_id, store_id)');
   }
 }
 
