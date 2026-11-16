@@ -47,6 +47,12 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   await runAsync('DROP TABLE IF EXISTS telegram_notification_outbox');
   await ensureTelegramNotificationOutboxSchema({ runAsync, getAsync });
   await ensureTelegramNotificationOutboxSchema({ runAsync, getAsync });
+  // Upgrade a pre-existing outbox table using the old state enum and no message receipt column.
+  await runAsync("ALTER TABLE telegram_notification_outbox MODIFY COLUMN state ENUM('pending','processing','delivered','dead') NOT NULL DEFAULT 'pending'");
+  await runAsync('ALTER TABLE telegram_notification_outbox DROP COLUMN telegram_message_id');
+  await ensureTelegramNotificationOutboxSchema({ runAsync, getAsync });
+  const upgradedMessageIdColumn = await getAsync('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?', ['telegram_notification_outbox', 'telegram_message_id']);
+  assert.ok(upgradedMessageIdColumn, 'migration must add the Telegram message receipt column');
   await ensureTelegramCustomerBindingSchema({ runAsync });
   await ensureTelegramCustomerBindingSchema({ runAsync });
   await ensureTelegramStoreAdminRecipientSchema({ runAsync });
