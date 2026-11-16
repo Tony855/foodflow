@@ -90,7 +90,7 @@ function isReviewEventColumnTypeSafe(name, column, contract) {
   if (!type) return false;
 
   if (contract.kind === 'integer') {
-    return /^(tinyint|smallint|mediumint|int|integer|bigint)(?:\\s*\\(\\s*\\d+\\s*\\))?(?:\\s+unsigned)?$/i.test(type);
+    return /^(tinyint|smallint|mediumint|int|integer|bigint)(?:\s*\(\s*\d+\s*\))?(?:\\s+unsigned)?$/i.test(type);
   }
 
   if (contract.kind === 'exception_category') {
