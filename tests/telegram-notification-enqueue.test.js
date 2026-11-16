@@ -48,8 +48,8 @@ test('customer Telegram enqueue locks settings, tenant, and exact binding before
     allAsync: async (sql, params) => {
       if (sql.includes('settings')) {
         assert.match(sql, /ORDER BY `key` FOR UPDATE/);
-        assert.deepEqual(params, ['telegram_admin_bot_enabled', 'telegram_admin_chat_id', 'telegram_client_bot_enabled']);
-        return [{ key: 'telegram_admin_bot_enabled', value: '1' }, { key: 'telegram_admin_chat_id', value: '-100111' }, { key: 'telegram_client_bot_enabled', value: '1' }];
+        assert.deepEqual(params, ['telegram_admin_bot_enabled', 'telegram_client_bot_enabled']);
+        return [{ key: 'telegram_admin_bot_enabled', value: '1' }, { key: 'telegram_client_bot_enabled', value: '1' }];
       }
       if (sql.includes('FROM merchants')) {
         assert.match(sql, /FOR UPDATE/);
@@ -102,8 +102,8 @@ test('store admin enqueue locks Bot, tenant, and recipient rows before writing',
     allAsync: async (sql, params) => {
       if (sql.includes('settings')) {
         assert.match(sql, /ORDER BY `key` FOR UPDATE/);
-        assert.deepEqual(params, ['telegram_admin_bot_enabled', 'telegram_client_bot_enabled']);
-        return [{ key: 'telegram_admin_bot_enabled', value: '1' }, { key: 'telegram_client_bot_enabled', value: '1' }];
+        assert.deepEqual(params, ['telegram_admin_bot_enabled', 'telegram_admin_chat_id', 'telegram_client_bot_enabled']);
+        return [{ key: 'telegram_admin_bot_enabled', value: '1' }, { key: 'telegram_admin_chat_id', value: '-100111' }, { key: 'telegram_client_bot_enabled', value: '1' }];
       }
       if (sql.includes('FROM merchants')) {
         assert.match(sql, /FOR UPDATE/);
