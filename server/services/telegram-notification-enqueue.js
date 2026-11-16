@@ -1,21 +1,5 @@
 'use strict';
 
-async function enqueueSystemAdminTelegramNotification({ getAsync, eventKey, event, enqueue } = {}) {
-  if (typeof getAsync !== 'function') throw new TypeError('getAsync is required');
-  // Lock the setting row so a concurrent Bot-disable transaction either sees
-  // this enqueue and dead-letters it, or commits first and prevents the enqueue.
-  const setting = await getAsync("SELECT value FROM settings WHERE `key`=? FOR UPDATE", ['telegram_admin_bot_enabled']);
-  if (String(setting?.value || '') !== '1') return false;
-  const enqueueNotification = enqueue || require('./telegram-notification-outbox').enqueueTelegramNotification;
-  await enqueueNotification({
-    eventKey,
-    recipientScope: 'system_admin',
-    recipientKey: 'admin:primary',
-    event
-  });
-  return true;
-}
-
 async function enqueueCustomerTelegramNotification({ allAsync, customerTokenHash, merchantId, storeId, eventKey, event, enqueue } = {}) {
   if (typeof allAsync !== 'function') throw new TypeError('allAsync is required');
   if (typeof customerTokenHash !== 'string' || !/^[a-f0-9]{64}$/.test(customerTokenHash)) return false;
@@ -77,4 +61,4 @@ async function enqueueStoreAdminTelegramNotification({ allAsync, merchantId, sto
   return true;
 }
 
-module.exports = { enqueueSystemAdminTelegramNotification, enqueueCustomerTelegramNotification, enqueueStoreAdminTelegramNotification };
+module.exports = { enqueueCustomerTelegramNotification, enqueueStoreAdminTelegramNotification };
