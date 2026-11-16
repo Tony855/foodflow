@@ -22,3 +22,571 @@
      - shared.js
      - modals.js
    ============================================================ */
+
+/* ========== pages/admin/context.js ========== */
+﻿/*
+ * pages/admin/context.js — 共享上下文（在所有模块之前加载）
+ */
+window.SLF = window.SLF || {};
+window.SLF.admin = {
+  // null-safe $ : 找不到元素时返回空壳对象，避免整页崩
+  $: (sel) => {
+    const el = document.querySelector(sel);
+    if (el) return el;
+    return {
+      textContent: '',
+      innerHTML: '',
+      value: '',
+      placeholder: '',
+      checked: false,
+      disabled: false,
+      style: {},
+      classList: { add: () => {}, remove: () => {}, toggle: () => {}, contains: () => false },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      setAttribute: () => {},
+      removeAttribute: () => {},
+      getAttribute: () => null,
+      appendChild: () => {},
+      removeChild: () => {},
+      focus: () => {},
+      blur: () => {},
+      click: () => {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      closest: () => null,
+      dataset: {}
+    };
+  },
+  api: async (path, opts = {}) => {
+    const method = (opts.method || 'GET').toUpperCase();
+    return SLF.api._request(method, path, { body: opts.body });
+  },
+  tAdmin: (key) => (SLF.i18n && SLF.i18n.t ? SLF.i18n.t(key) : key),
+  L: (key) => (SLF.i18n && SLF.i18n.t ? SLF.i18n.t(key) : key),
+  esc: (s) => String(s ?? '').replace(/[&<>\"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;' }[c])),
+  hasPermission: () => true,
+  applyPermissions: () => {},
+  showConfirm: (msg, cb) => cb && cb(),
+  showPasswordModal: (title, cb) => cb && cb(''),
+  categoriesCache: () => [],
+  menusCache: () => [],
+  ordersCache: () => [],
+  setCategories: () => {},
+  setMenus: () => {},
+  setTables: () => {},
+  setOrders: () => {},
+  dualCurrencyEnabled: () => false,
+  secondaryCurrencyCode: () => '',
+  secondaryCurrencyCode: 'USD',
+  adminId: 0,
+  buildSessionLabels: (orders) => new Map(),
+};
+
+
+/* ========== pages/admin/settings.js ========== */
+/*
+ * pages/admin/settings.js — 显示设置模块
+ */
+(function(){
+'use strict';
+
+const ctx = window.SLF.admin;
+if (!ctx) return;
+
+
+const { $, esc, hasPermission, showConfirm } = ctx;
+
+// tAdmin / L 动态取：admin.js 后加载，会覆盖 ctx.tAdmin，所以不能提前解构
+function tAdmin(key, fb) {
+  const fn = (window.SLF && window.SLF.admin && window.SLF.admin.tAdmin) || ctx.tAdmin;
+  return fn ? fn(key, fb) : fb;
+}
+function L(key) {
+  const fn = (window.SLF && window.SLF.admin && window.SLF.admin.L) || ctx.L;
+  return fn ? fn(key) : key;
+}
+
+async function loadDisplaySettings() {
+  try {
+    const d = await SLF.api.get('/admin/display-settings');
+    const admin = window.SLF.admin;
+    if (d) {
+      admin.setDualCurrency && admin.setDualCurrency(!!d.secondaryCurrencyCode);
+      admin.setSecondaryCurrencyCode && admin.setSecondaryCurrencyCode(d.secondaryCurrencyCode || '');
+    }
+    // 填充两个下拉
+    const list = admin.currenciesCache ? admin.currenciesCache() : [];
+    const primarySel = document.getElementById('dispPrimaryCurrency');
+    const secondarySel = document.getElementById('dispSecondaryCurrency');
+    if (primarySel) {
+      primarySel.innerHTML = list.map(c =>
+        `<option value="${esc(c.code)}">${esc(c.code)} · ${esc(c.symbol)} · ${esc(c.name)}</option>`
+      ).join('');
+      primarySel.value = d.primaryCurrencyCode || 'USD';
+    }
+    if (secondarySel) {
+      secondarySel.innerHTML = '<option value="">' + tAdmin('noSecondaryCurrency') + '</option>' +
+        list.map(c => `<option value="${esc(c.code)}">${esc(c.code)} · ${esc(c.symbol)} · ${esc(c.name)}</option>`).join('');
+      secondarySel.value = d.secondaryCurrencyCode || '';
+    }
+    // 显示当前店铺名
+    const sel = document.getElementById('adminStoreSelect');
+    const el = document.getElementById('currencyCurrentStoreName');
+    if (sel && el && sel.selectedIndex >= 0) el.textContent = sel.options[sel.selectedIndex].text;
+    return;
+    const config = await SLF.api.get('/public/config');
+    if (config) {
+      admin.setDefaultCurrencyObj && admin.setDefaultCurrencyObj(config.defaultCurrency || { symbol: '$', rate: 1, code: 'USD' });
+    }
+    // 从 display-settings 读主/副币
+    try {
+      const ds = await SLF.api.get('/admin/display-settings');
+      const list = admin.currenciesCache ? admin.currenciesCache() : [];
+      const prim = ds.primaryCurrencyCode ? (list.find(c => c.code === ds.primaryCurrencyCode) || admin.defaultCurrencyObj()) : admin.defaultCurrencyObj();
+      const sec = ds.secondaryCurrencyCode ? (list.find(c => c.code === ds.secondaryCurrencyCode) || null) : null;
+      SLF.money.configure({
+        currencies: list,
+        primaryCurrency: prim,
+        secondaryCurrency: sec
+      });
+    } catch (e) { console.warn('货币配置失败', e); }
+  } catch (e) { console.warn('加载货币配置失败', e); }
+}
+
+async function loadOrderPrefixes() {
+  try {
+    const d = await SLF.api.get('/admin/order-prefixes');
+    $('#prefixNormal').value = d.order_prefix_normal || '11';
+    $('#prefixRefund').value = d.order_prefix_refund || '01';
+    $('#prefixDiscount').value = d.order_prefix_discount || '21';
+    $('#prefixVip').value = d.order_prefix_vip || '61';
+    $('#orderResetPeriod').value = d.order_no_reset_period || 'never';
+  } catch (e) {}
+}
+async function saveOrderPrefixes() {
+  try {
+    await SLF.api.post('/admin/order-prefixes', {
+      normal: $('#prefixNormal').value,
+      refund: $('#prefixRefund').value,
+      discount: $('#prefixDiscount').value,
+      vip: $('#prefixVip').value,
+      daily_reset: $('#orderResetPeriod').value
+    });
+    SLF.ui.toast(L('saveSuccess') || '保存成功');
+  } catch (e) {
+    SLF.ui.toast(L('operationFailed') || '保存失败');
+  }
+}
+async function loadNotificationSettings() {
+  try {
+    const d = await SLF.api.get('/admin/notification-settings');
+    if (d) $('#newOrderSoundEnabled').checked = !!d.enabled;
+  } catch (e) { console.warn('加载提示音设置失败', e); }
+}
+
+async function loadTelegramStoreNotificationSettings() {
+  try {
+    const d = await SLF.api.get('/admin/telegram/notification-settings');
+    if (!d) return;
+    $('#telegramStoreNotifyEnabled').checked = !!d.enabled;
+    $('#telegramStoreNotifyChatId').value = d.chatId || '';
+    $('#telegramStoreNotifyOrderCreated').checked = d.notifyOrderCreated !== false;
+    $('#telegramStoreNotifySettled').checked = d.notifySettled !== false;
+    $('#telegramStoreNotifyRefunded').checked = d.notifyRefunded !== false;
+    const status = $('#telegramStoreNotifyGlobalStatus');
+    if (status) status.textContent = d.globalBotEnabled
+      ? '管理员 Bot 已启用；门店通知将发送到上方配置的 Chat。'
+      : '超级管理员尚未启用管理员 Bot。请联系超级管理员完成全局 Bot 配置后再启用门店通知。';
+  } catch (e) { console.warn('加载 Telegram 门店通知设置失败', e); }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const saveDisplaySettingsBtn = document.getElementById('saveDisplaySettingsBtn');
+  if (saveDisplaySettingsBtn) {
+    saveDisplaySettingsBtn.onclick = async function() {
+      try {
+        const applyAll = await SLF.ui.confirm(
+          tAdmin('applyToAllStoresMsg') || '是否应用到本商户的所有店铺？\n确定 = 应用到所有店铺，取消 = 仅当前店铺',
+          tAdmin('applyAll') || '应用到全部',
+          tAdmin('onlyCurrent') || '仅当前店铺'
+        );
+        await SLF.api.post('/admin/display-settings', {
+          primaryCurrencyCode: $('#dispPrimaryCurrency').value,
+          secondaryCurrencyCode: $('#dispSecondaryCurrency').value,
+          applyAll: applyAll
+        });
+        await loadDisplaySettings();
+        await loadOrderPrefixes();
+        if (window.loadMenus) await window.loadMenus();
+        SLF.ui.toast('✅ ' + tAdmin('displaySettingsSaved') + (applyAll ? ' (' + (tAdmin('allStores') || '所有店铺') + ')' : ''));
+      } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+    };
+  }
+  const saveNotifySettingsBtn = document.getElementById('saveNotifySettingsBtn');
+  if (saveNotifySettingsBtn) {
+    saveNotifySettingsBtn.onclick = async function() {
+      try {
+        await SLF.api.post('/admin/notification-settings', { enabled: document.getElementById('newOrderSoundEnabled').checked });
+        SLF.ui.toast('✅ ' + tAdmin('notifySettingsSaved'));
+        await loadNotificationSettings();
+      } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+    };
+  }
+
+  const saveTelegramStoreNotifyBtn = document.getElementById('saveTelegramStoreNotifyBtn');
+  if (saveTelegramStoreNotifyBtn) {
+    saveTelegramStoreNotifyBtn.onclick = async function() {
+      try {
+        await SLF.api.put('/admin/telegram/notification-settings', {
+          enabled: $('#telegramStoreNotifyEnabled').checked,
+          chatId: $('#telegramStoreNotifyChatId').value.trim(),
+          notifyOrderCreated: $('#telegramStoreNotifyOrderCreated').checked,
+          notifySettled: $('#telegramStoreNotifySettled').checked,
+          notifyRefunded: $('#telegramStoreNotifyRefunded').checked
+        });
+        SLF.ui.toast('Telegram 门店通知设置已保存');
+        await loadTelegramStoreNotificationSettings();
+      } catch (e) { SLF.ui.toast('❌ ' + (e.message || 'Telegram 门店通知设置保存失败')); }
+    };
+  }
+  loadTelegramStoreNotificationSettings();
+});
+
+// 挂到 window
+window.loadDisplaySettings = loadDisplaySettings;
+window.loadOrderPrefixes = loadOrderPrefixes;
+window.saveOrderPrefixes = saveOrderPrefixes;
+window.loadNotificationSettings = loadNotificationSettings;
+window.loadTelegramStoreNotificationSettings = loadTelegramStoreNotificationSettings;
+
+})();
+
+/* ===== 展示页设置（追加） ===== */
+(function() {
+
+  /* 本 IIFE 内 tAdmin 兜底 */
+  const tAdmin = function(key, fb) {
+    try {
+      const a = window.SLF && window.SLF.admin;
+      if (a && typeof a.tAdmin === 'function') {
+        const v = a.tAdmin(key);
+        if (v && v !== key) return v;
+      }
+      const v2 = window.SLF && window.SLF.i18n && window.SLF.i18n.t(key);
+      if (v2 && v2 !== key) return v2;
+    } catch (e) {}
+    return fb !== undefined ? fb : key;
+  };
+  const L = function(key) { return tAdmin(key); };
+
+  const D = window.SLF && window.SLF.admin;
+  if (!D) return;
+  const api = D.api;
+
+  async function loadDisplayPageSettings() {
+    try {
+      // 显示当前店铺名
+      try {
+        const sel = document.getElementById('adminStoreSelect');
+        const el = document.getElementById('dispCurrentStoreName');
+        if (sel && el && sel.selectedIndex >= 0) {
+          el.textContent = sel.options[sel.selectedIndex].text;
+        }
+      } catch (e) {}
+
+      const s = await api('/admin/display-page-settings');
+      const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+      const setChk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = (v === 1 || v === '1' || v === true); };
+      setVal('dispMode', s.mode || 'grid');
+      setVal('dispOrder', s.order || 'default');
+      setVal('dispImageDuration', (s.image_duration !== undefined && s.image_duration !== null) ? s.image_duration : 8);
+      setVal('dispVideoMode', s.video_mode || 'full');
+      setVal('dispVideoDuration', (s.video_duration !== undefined && s.video_duration !== null) ? s.video_duration : 15);
+      setChk('dispOnlyActive', s.only_active);
+      setChk('dispShowPrice', s.show_price);
+      setChk('dispShowDesc', s.show_desc);
+      try {
+        const langs = JSON.parse(s.languages || '["zh"]');
+        document.querySelectorAll('#dispLanguages input[type="checkbox"]').forEach(cb => {
+          cb.checked = langs.includes(cb.value);
+        });
+      } catch (e) {}
+
+    } catch (e) { console.warn('load display-page-settings failed', e); }
+  }
+
+  async function saveDisplayPageSettings() {
+    const g = id => document.getElementById(id);
+    try {
+      await api('/admin/display-page-settings', { method: 'POST', body: {
+        mode: g('dispMode').value,
+        order: g('dispOrder').value,
+        image_duration: parseInt(g('dispImageDuration').value, 10) || 8,
+        video_mode: g('dispVideoMode').value,
+        video_duration: parseInt(g('dispVideoDuration').value, 10) || 15,
+        only_active: g('dispOnlyActive').checked ? 1 : 0,
+        show_price: g('dispShowPrice').checked ? 1 : 0,
+        show_desc: g('dispShowDesc').checked ? 1 : 0,
+        languages: JSON.stringify(
+          Array.from(document.querySelectorAll('#dispLanguages input[type="checkbox"]'))
+            .filter(cb => cb.checked).map(cb => cb.value)
+        )
+      }});
+      if (SLF.ui && SLF.ui.toast) SLF.ui.toast('✅ ' + (tAdmin('displaySettingsSaved') || '展示页设置已保存'));
+    } catch (e) {
+      if (SLF.ui && SLF.ui.toast) SLF.ui.toast('❌ ' + (tAdmin('saveFailed') || '保存失败') + ': ' + e.message);
+    }
+  }
+
+  window.loadDisplayPageSettings = loadDisplayPageSettings;
+  window.saveDisplayPageSettings = saveDisplayPageSettings;
+
+  async function applyDisplayPageToAll() {
+    // 1) 先保存当前店铺
+    try {
+      await saveDisplayPageSettings();
+    } catch (e) { /* 忽略 save 里已经 toast */ }
+
+    // 2) 二次确认
+    const ok = await SLF.ui.confirm(
+      tAdmin('applyDisplayAllConfirm'),
+      tAdmin('applyConfirm'), tAdmin('cancel')
+    );
+    if (!ok) return;
+
+    // 3) 调用接口
+    try {
+      const r = await api('/admin/display-page-settings/apply-all', { method: 'POST' });
+      SLF.ui.toast(tAdmin('appliedToPrefix') + (r.appliedTo || 0) + tAdmin('appliedToSuffix'));
+    } catch (e) {
+      SLF.ui.toast(tAdmin('applyFailedColon') + e.message);
+    }
+  }
+  window.applyDisplayPageToAll = applyDisplayPageToAll;
+
+  // 事件委托：不依赖 DOMContentLoaded，也不怕 DOM 被重建
+  document.addEventListener('click', function(e) {
+    const t = e.target;
+    const btn = t && t.closest && t.closest('#saveDisplayPageBtn');
+    if (!btn) return;
+    e.preventDefault();
+    saveDisplayPageSettings();
+  }, true);
+
+  // 监听"系统设置"模块变可见时，自动加载配置
+  // 页面加载后直接调一次（不管是否切到系统设置）
+  function bootLoadDisplayPageSettings() {
+    try { loadDisplayPageSettings(); } catch (e) { console.warn('boot load:', e); }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootLoadDisplayPageSettings);
+  } else {
+    setTimeout(bootLoadDisplayPageSettings, 300);
+  }
+
+  // 切到"系统设置"模块时再刷一次（覆盖多店铺场景）
+  document.addEventListener('click', function(e) {
+    const nav = e.target && e.target.closest && e.target.closest('.nav-item');
+    if (nav && nav.dataset && nav.dataset.module === 'password') {
+      setTimeout(function() { try { loadDisplayPageSettings(); } catch (er) {} }, 100);
+    }
+  }, true);
+})();
+
+
+/* ========== pages/admin/logs.js ========== */
+/*
+ * pages/admin/logs.js — 操作日志模块
+ * 依赖 SLF.admin 共享上下文
+ */
+(function(){
+'use strict';
+
+const ctx = window.SLF.admin;
+if (!ctx) return;
+
+const { $, api, tAdmin, esc, hasPermission } = ctx;
+
+function translateAuditAction(action) {
+  const labels = tAdmin('auditAction');
+  return (labels && labels[action]) || action;
+}
+
+function parseAuditObject(details) {
+  if (!details) return '';
+  const colonIdx = details.indexOf(':');
+  if (colonIdx > 0) return details.substring(colonIdx + 1).trim();
+  return details;
+}
+
+async function loadAuditLogs() {
+  if (!hasPermission('can_view_logs')) {
+    $('#auditLogs').innerHTML = '<div class="empty-hint">' + tAdmin('noPermission') + '</div>';
+    return;
+  }
+  try {
+    const logs = await api('/admin/audit-logs');
+    $('#auditLogs').innerHTML = logs.length ?
+      logs.map(log => `<div class="row"><div><b>${SLF.utils.formatDateTime(log.created_at)}</b><small>${esc(log.actor_username || '-')} · ${translateAuditAction(log.action)}${parseAuditObject(log.details) ? ' · ' + esc(parseAuditObject(log.details)) : ''}</small></div><span class="badge">${esc(log.ip || '-')}</span></div>`).join('') :
+        `<div class="empty-hint">${tAdmin('noAuditLogs')}</div>`;
+  } catch (e) {
+    $('#auditLogs').innerHTML = `<div class="empty-hint">${tAdmin('loadFailed')}</div>`;
+  }
+}
+
+function switchLogTab(tab) {
+  $('#logTabLogin').classList.toggle('active', tab === 'login');
+  $('#logTabAudit').classList.toggle('active', tab === 'audit');
+  $('#loginLogsPanel').style.display = tab === 'login' ? 'block' : 'none';
+  $('#auditLogsPanel').style.display = tab === 'audit' ? 'block' : 'none';
+  if (tab === 'audit') loadAuditLogs();
+}
+
+// 挂到 window 供 onclick 使用
+window.translateAuditAction = translateAuditAction;
+window.parseAuditObject = parseAuditObject;
+window.loadAuditLogs = loadAuditLogs;
+window.switchLogTab = switchLogTab;
+
+})();
+
+
+/* ========== pages/admin/waiter.js ========== */
+/*
+ * pages/admin/waiter.js — 服务员管理模块
+ */
+(function(){
+'use strict';
+
+const ctx = window.SLF.admin;
+if (!ctx) return;
+
+const { $, api, tAdmin, esc, hasPermission, showConfirm } = ctx;
+
+async function loadWaiters() {
+  try {
+    const rows = await api('/admin/waiters');
+    const stores = await api('/admin/stores');
+    const storeMap = {};
+    stores.forEach(s => storeMap[s.id] = s.name);
+    $('#waiterList').innerHTML = rows.length ?
+      rows.map(w => {
+        const perms = [];
+        if (w.can_order) perms.push(tAdmin('placeOrder'));
+        if (w.can_mark_item) perms.push(tAdmin('serveDish'));
+        if (w.can_complete_order) perms.push(tAdmin('completeOrder'));
+        const storeName = w.store_name || storeMap[w.store_id] || tAdmin('mainStore');
+        const storeTag = '<span style="display:inline-block;background:rgba(52,152,219,.15);color:#5dade2;padding:1px 8px;border-radius:8px;font-size:11px;margin-left:6px;">🏪 ' + esc(storeName) + '</span>';
+        return '<div class="admin-card">' +
+        '<div class="info">' +
+          '<div class="title">' + esc(w.display_name) + ' · ' + esc(w.username) + storeTag + '</div>' +
+          '<div class="sub">' +
+            (w.active ? '<span style="color:#43e97b">' + tAdmin('enabled') + '</span>' : '<span style="color:#f5576c">' + tAdmin('disabled') + '</span>') +
+            ' · ' + (perms.join(' / ') || tAdmin('noPermission')) +
+          '</div>' +
+        '</div>' +
+        '<div class="actions">' +
+          '<button class="edit-btn" onclick="openWaiterEdit(' + w.id + ')">✏️ ' + ctx.L('edit') + '</button>' +
+          (hasPermission('can_manage_waiter') ? '<button class="danger" onclick="deleteWaiter(' + w.id + ')">' + ctx.L('delete') + '</button>' : '') +
+        '</div>' +
+      '</div>';
+      }).join('') :
+      '<div class="empty-hint">' + tAdmin('noData') + '</div>';
+  } catch (e) {
+    console.error(tAdmin('loadWaiterFailed') + ':', e);
+    $('#waiterList').innerHTML = '<div class="empty-hint">' + tAdmin('noData') + '</div>';
+  }
+}
+
+async function updateWaiterPerm(id, key, val) {
+  try {
+    await api('/admin/waiters/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: { [key]: val } });
+    SLF.ui.toast('✅ ' + tAdmin('updated'));
+  } catch (e) { SLF.ui.toast('❌ ' + e.message); loadWaiters(); }
+}
+
+function deleteWaiter(id) {
+  showConfirm(tAdmin('confirmDelete'), async function() {
+    try {
+      await api('/admin/waiters/' + id, { method: 'DELETE' });
+      loadWaiters();
+      SLF.ui.toast('✅ ' + tAdmin('deleted'));
+    } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+  });
+}
+
+async function openWaiterEdit(id) {
+  try {
+    const waiter = await api('/admin/waiters');
+    const target = waiter.find(w => String(w.id) === String(id));
+    if (!target) { SLF.ui.toast(`❌ ${tAdmin('waiterNotFound')}`); return; }
+    $('#editWaiterId').value = target.id;
+    $('#editWaiterUsername').value = target.username;
+    $('#editWaiterPassword').value = '';
+    $('#editWaiterDisplayName').value = target.display_name;
+    const stores = await api('/admin/stores');
+    const select = $('#editWaiterStore');
+    select.innerHTML = stores.map(s => `<option value="${s.id}" ${s.id === target.store_id ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
+    $('#editWaiterCanOrder').checked = !!target.can_order;
+    $('#editWaiterCanMarkItem').checked = !!target.can_mark_item;
+    $('#editWaiterCanCompleteOrder').checked = !!target.can_complete_order;
+    $('#waiterEditTitle').textContent = '🧑‍🍳 ' + tAdmin('editWaiter') + ' #' + id;
+    $('#waiterEditModal').classList.add('open');
+  } catch (e) { SLF.ui.toast(`❌ ${tAdmin('loadWaiterFailed')}: ` + e.message); }
+}
+
+function closeWaiterEdit() { $('#waiterEditModal').classList.remove('open'); }
+
+document.addEventListener('DOMContentLoaded', function() {
+  const addWaiterBtn = document.getElementById('addWaiterBtn');
+  if (addWaiterBtn) {
+    addWaiterBtn.onclick = async function() {
+      const username = $('#waiterUsernameInput').value.trim();
+      const password = $('#waiterPasswordInput').value;
+      const display_name = $('#waiterNameInput').value.trim();
+      const store_id = parseInt($('#waiterStoreSelect').value) || 1;
+      if (!username || !password || !display_name) { SLF.ui.toast(`❌ ${tAdmin('waiterInfoRequired')}`); return; }
+      try {
+        await api('/admin/waiters', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: { username, password, display_name, can_order: 1, can_mark_item: 1, can_complete_order: 1, store_id } });
+        $('#waiterUsernameInput').value = '';
+        $('#waiterPasswordInput').value = '';
+        $('#waiterNameInput').value = '';
+        loadWaiters();
+        SLF.ui.toast('✅ ' + tAdmin('added'));
+      } catch (e) { SLF.ui.toast('❌ ' + e.message); }
+    };
+  }
+  const saveWaiterEditBtn = document.getElementById('saveWaiterEditBtn');
+  if (saveWaiterEditBtn) {
+    saveWaiterEditBtn.onclick = async function() {
+      const id = parseInt($('#editWaiterId').value);
+      const username = $('#editWaiterUsername').value.trim();
+      const display_name = $('#editWaiterDisplayName').value.trim();
+      const store_id = parseInt($('#editWaiterStore').value);
+      const password = $('#editWaiterPassword').value.trim();
+      const can_order = $('#editWaiterCanOrder').checked ? 1 : 0;
+      const can_mark_item = $('#editWaiterCanMarkItem').checked ? 1 : 0;
+      const can_complete_order = $('#editWaiterCanCompleteOrder').checked ? 1 : 0;
+      if (!username || !display_name) { SLF.ui.toast(`❌ ${tAdmin('usernameAndNameRequired')}`); return; }
+      try {
+        const payload = { username, display_name, store_id, can_order, can_mark_item, can_complete_order };
+        if (password) payload.password = password;
+        await api('/admin/waiters/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: payload });
+        closeWaiterEdit();
+        loadWaiters();
+        SLF.ui.toast(`✅ ${tAdmin('waiterUpdated')}`);
+      } catch (e) { SLF.ui.toast(`❌ ${tAdmin('updateFailed')}: ` + e.message); }
+    };
+  }
+});
+
+// 挂到 window
+window.loadWaiters = loadWaiters;
+window.updateWaiterPerm = updateWaiterPerm;
+window.deleteWaiter = deleteWaiter;
+window.openWaiterEdit = openWaiterEdit;
+window.closeWaiterEdit = closeWaiterEdit;
+
+})();
+
