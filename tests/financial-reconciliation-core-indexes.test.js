@@ -204,12 +204,23 @@ test('accepts MariaDB JSON alias storage and full-width legacy text columns', as
       after_json: 'longtext',
       reason: 'text',
       actor_username: 'text',
-      idempotency_key: 'text',
+      idempotency_key: 'varchar(128)',
       request_sha256: 'char(64)',
       previous_hash: 'char(64)',
       event_hash: 'char(64)'
     }
   }});
   await db.run();
+  assert.deepEqual(db.writes, []);
+});
+
+
+test('rejects TEXT idempotency keys that cannot back the required full unique index', async () => {
+  const db = fixture({ overrides: {
+    'financial_reconciliation_review_events:type': {
+      idempotency_key: 'text'
+    }
+  }});
+  await assert.rejects(db.run(), error => error.code === 'FINANCE_REVIEW_EVENT_SCHEMA_TYPE_DRIFT');
   assert.deepEqual(db.writes, []);
 });
