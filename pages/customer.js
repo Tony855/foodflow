@@ -471,7 +471,7 @@
                 }
 
                 tableDisplay.textContent = state.table || t('notScanned', null, '未扫码');
-                tableInfo.title = state.table ? `${t('table', null, '桌号')}: ${state.table}` : t('scanToBind', null, '请扫描桌面二维码绑定桌号');
+                tableInfo.title = state.table ? `${t('table', null, '座号')}: ${state.table}` : t('scanToBind', null, '请扫描桌面二维码绑定座号');
                 document.getElementById('customerOrderBtn').hidden = !isScanSessionValid();
                 document.getElementById('callWaiterBtn').hidden = !isScanSessionValid();
                 await refreshCustomerTelegramBinding();
@@ -488,7 +488,7 @@
                 state.customerToken = '';
                 clearStoredCustomerToken();
                 tableDisplay.textContent = t('notScanned', null, '未扫码');
-                tableInfo.title = t('scanToBind', null, '请扫描桌面二维码绑定桌号');
+                tableInfo.title = t('scanToBind', null, '请扫描桌面二维码绑定座号');
                 document.getElementById('customerOrderBtn').hidden = true;
                 document.getElementById('callWaiterBtn').hidden = true;
                 if (customerTelegramBtn) customerTelegramBtn.hidden = true;
@@ -1238,7 +1238,7 @@
 
             if (!state.table) {
                 if (tableDisplay) tableDisplay.textContent = t('notScanned', null, '未扫码');
-                if (tableInfo) tableInfo.title = t('scanToBind', null, '请扫描桌面二维码绑定桌号');
+                if (tableInfo) tableInfo.title = t('scanToBind', null, '请扫描桌面二维码绑定座号');
             }
 
             setText('callConfirmTitle', t('callWaiter', null, '呼叫服务员'));
