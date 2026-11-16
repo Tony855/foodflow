@@ -28,6 +28,11 @@ function formatTelegramBusinessNotification(event) {
     '订单：' + orderNo
   ];
 
+  if (event.type === 'order.created') {
+    const note = safeField(event.note, 200);
+    if (note) lines.push('备注：' + note);
+  }
+
   if (event.type === 'order.created' || event.type === 'order.settled') {
     const amount = Number(event.amount);
     if (!Number.isFinite(amount) || amount < 0 || amount > 99999999) {
