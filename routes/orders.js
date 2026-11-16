@@ -587,7 +587,7 @@ app.post('/api/orders', async (req, res) => {
           merchantId: store?.merchant_id,
           storeId: finalStoreId,
           eventKey: `order:${result.lastID}:created:store`,
-          event: { type: 'order.created', storeName: store?.name || `Store ${finalStoreId}`, orderNo, amount: calculatedTotal, currency: 'USD', note }
+          event: { type: 'order.created', storeName: store?.name || `Store ${finalStoreId}`, orderNo, tableName: table, amount: calculatedTotal, currency: 'USD', note }
         });
         return { orderId: result.lastID, orderNo };
       });
@@ -850,7 +850,7 @@ app.put('/api/orders/:id(\\d+)', requireAdminOrWaiter, async (req, res) => {
           merchantId: store?.merchant_id,
           storeId: orderStoreId,
           eventKey: `order:${id}:settled:store`,
-          event: { type: 'order.settled', storeName: store?.name || `Store ${orderStoreId}`, orderNo: lockedOrder.order_no || String(id), amount: calculatedTotal, currency: 'USD' }
+          event: { type: 'order.settled', storeName: store?.name || `Store ${orderStoreId}`, orderNo: lockedOrder.order_no || String(id), tableName: lockedOrder.table_name, amount: calculatedTotal, currency: 'USD' }
         });
       }
 
