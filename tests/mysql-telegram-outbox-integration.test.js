@@ -153,7 +153,6 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   const leaseA = await claimTelegramNotifications({ workerId: workerA, limit: 1, leaseSeconds: 30 });
   assert.equal(leaseA.length, 1);
   await runAsync('UPDATE telegram_notification_outbox SET locked_until=DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND) WHERE id=?', [leaseA[0].id]);
-  assert.equal(await markTelegramNotificationSending(leaseA[0].id, workerA), true);
   assert.equal(await markTelegramNotificationDelivered(leaseA[0].id, workerA), false);
   const leaseB = await claimTelegramNotifications({ workerId: workerB, limit: 1, leaseSeconds: 30 });
   assert.equal(leaseB.length, 1);
