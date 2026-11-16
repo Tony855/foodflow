@@ -603,7 +603,7 @@ async function loadTelegramBotSettings() {
       const prefix = scope === 'client' ? 'telegramClient' : 'telegramAdmin';
       const enabled = document.getElementById(prefix + 'Enabled');
       const token = document.getElementById(prefix + 'Token');
-      const chat = document.getElementById(prefix + 'ChatId');
+      const chat = scope === 'client' ? document.getElementById(prefix + 'ChatId') : null;
       const clear = document.getElementById(prefix + 'ClearToken');
       const status = document.getElementById(prefix + 'TokenStatus');
       if (enabled) enabled.value = item.enabled ? '1' : '0';
@@ -626,7 +626,7 @@ async function saveTelegramBotSettings() {
       enabled: document.getElementById(prefix + 'Enabled').value === '1',
       token: document.getElementById(prefix + 'Token').value.trim(),
       clear_token: document.getElementById(prefix + 'ClearToken').checked,
-      chat_id: document.getElementById(prefix + 'ChatId').value.trim()
+      ...(scope === 'client' ? { chat_id: document.getElementById(prefix + 'ChatId').value.trim() } : {})
     };
   };
   try {
@@ -649,7 +649,7 @@ async function testTelegramBot(scope) {
     } else {
       await api('/super/telegram/admin/test', { method: 'POST', body: JSON.stringify({}) });
     }
-    SLF.ui.toast(t('telegramTestSent') || '测试消息已发送，请检查 Telegram', 'success');
+    SLF.ui.toast(scope === 'admin' ? '管理员 Bot Token 验证成功' : (t('telegramTestSent') || '测试消息已发送，请检查 Telegram'), 'success');
   } catch (error) {
     SLF.ui.toast((t('telegramTestFailed') || '测试消息发送失败') + ': ' + error.message, 'error');
   }
