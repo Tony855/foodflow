@@ -75,7 +75,7 @@ test('escapes table names and omits table line when unavailable', () => {
   const withTable = formatTelegramBusinessNotification({
     type: 'order.created', storeName: 'A', orderNo: '1', tableName: '<VIP & 2>', amount: 1, currency: 'USD'
   });
-  assert.match(withTable, /<b>桌号<\\/b>：&lt;VIP &amp; 2&gt;/);
+  assert.ok(withTable.includes('<b>桌号</b>：&lt;VIP &amp; 2&gt;'));
   const withoutTable = formatTelegramBusinessNotification({
     type: 'order.created', storeName: 'A', orderNo: '2', amount: 1, currency: 'USD'
   });
