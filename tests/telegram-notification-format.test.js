@@ -11,7 +11,7 @@ test('formats allowlisted order events with bounded fields only', () => {
       amount: 12.5, currency: 'USD', customerToken: 'must-not-appear',
       note: '不要香菜、少辣'
     }),
-    '[FoodFlow] 新订单\n门店：Phnom Penh\n订单：11001\n备注：不要香菜、少辣\n金额：12.50 USD'
+    '🍽️ <b>FoodFlow · 新订单</b>\n━━━━━━━━━━━━━━━━━━\n🏪 <b>门店</b>：Phnom Penh\n🧾 <b>订单</b>：<code>11001</code>\n📝 <b>顾客备注</b>：\n<blockquote>不要香菜、少辣</blockquote>\n💰 <b>金额</b>：<b>12.50 USD</b>\n━━━━━━━━━━━━━━━━━━\n<i>FoodFlow · 智能订单通知</i>
   );
   assert.equal(
     formatTelegramBusinessNotification({
@@ -48,4 +48,14 @@ test('strips control characters and bounds untrusted display values', () => {
   });
   assert.equal(message.includes('\n[Injected]'), false);
   assert.equal(message.includes('\u0000'), false);
+});
+
+test('escapes HTML in untrusted store and customer note fields', () => {
+  const message = formatTelegramBusinessNotification({
+    type: 'order.created', storeName: '<b>Store</b> & Co', orderNo: '11<5',
+    amount: 8.5, currency: 'USD', note: '<b>注入</b> & 不要辣'
+  });
+  assert.match(message, /&lt;b&gt;Store&lt;\/b&gt; &amp; Co/);
+  assert.match(message, /&lt;b&gt;注入&lt;\/b&gt; &amp; 不要辣/);
+  assert.equal(message.includes('<b>注入</b>'), false);
 });
