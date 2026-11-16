@@ -23,8 +23,19 @@ const REVIEW_EVENT_ALLOWED_ACTIONS = Object.freeze([
   'confirm', 'reject', 'release', 'reassign', 'classify_exception'
 ]);
 
+const REVIEW_EVENT_ALLOWED_EXCEPTION_CATEGORIES = Object.freeze([
+  'refund', 'fee', 'settlement_difference', 'chargeback', 'other'
+]);
+
 const REVIEW_EVENT_COLUMN_CONTRACTS = Object.freeze({
   id: Object.freeze({ kind: 'auto_increment_id' }),
+  merchant_id: Object.freeze({ kind: 'integer' }),
+  store_id: Object.freeze({ kind: 'integer' }),
+  batch_id: Object.freeze({ kind: 'integer' }),
+  item_id: Object.freeze({ kind: 'integer' }),
+  journal_transaction_id: Object.freeze({ kind: 'integer' }),
+  exception_category: Object.freeze({ kind: 'exception_category' }),
+  actor_admin_id: Object.freeze({ kind: 'integer' }),
   actor_username: Object.freeze({ kind: 'string', minLength: 100 }),
   action: Object.freeze({ kind: 'action' }),
   reason: Object.freeze({ kind: 'string', minLength: 500 }),
@@ -191,5 +202,6 @@ module.exports = {
   REVIEW_EVENT_REQUIRED_NON_NULL_COLUMNS,
   REVIEW_EVENT_REQUIRED_NULLABLE_COLUMNS,
   REVIEW_EVENT_ALLOWED_ACTIONS,
+  REVIEW_EVENT_ALLOWED_EXCEPTION_CATEGORIES,
   REVIEW_EVENT_COLUMN_CONTRACTS
 };
