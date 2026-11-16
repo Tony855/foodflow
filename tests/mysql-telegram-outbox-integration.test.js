@@ -112,7 +112,7 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
 
   const key = `telegram-it:${crypto.randomUUID()}`;
   const input = {
-    eventKey: key, recipientScope: 'system_admin', recipientKey: 'admin:primary',
+    eventKey: key, recipientScope: 'merchant_store', recipientKey: 'store:9', merchantId: 7, storeId: 9,
     event: { type: 'order.created', storeName: 'Integration Store', orderNo: 'IT-42', amount: 12.5, currency: 'USD', customerToken: 'must-not-persist' }
   };
 
@@ -127,6 +127,20 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   assert.equal(first.id > 0, true);
   assert.equal(duplicate.id, first.id);
   assert.equal(Number((await getAsync('SELECT COUNT(*) AS total FROM telegram_notification_outbox WHERE event_key=?', [key])).total), 1);
+
+  // The same business event key may be reused safely across tenant stores,
+  // notification types, and recipient scopes without cross-tenant suppression.
+  const otherStore = await enqueueTelegramNotification({
+    ...input, merchantId: 8, storeId: 10, recipientKey: 'store:10'
+  });
+  assert.notEqual(otherStore.id, first.id);
+  const otherType = await enqueueTelegramNotification({
+    ...input,
+    event: { type: 'order.settled', storeName: 'Integration Store', orderNo: 'IT-42', amount: 12.5, currency: 'USD' }
+  });
+  assert.notEqual(otherType.id, first.id);
+  const sameScopeDuplicate = await enqueueTelegramNotification(input);
+  assert.equal(sameScopeDuplicate.id, first.id);
   const stored = await getAsync('SELECT payload_json,state,attempts FROM telegram_notification_outbox WHERE id=?', [first.id]);
   assert.equal(String(stored.payload_json).includes('must-not-persist'), false);
 
@@ -181,7 +195,7 @@ test('MySQL integration: Telegram outbox migration, rollback, idempotency, lease
   await enqueueTelegramNotification({ ...input, eventKey: floodKey });
   const floodResult = await processTelegramNotificationBatch({
     workerId: workerB, limit: 1,
-    resolveRecipient: async () => ({ scope: 'system_admin', merchantId: null, storeId: null, token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', chatId: '-100123' }),
+    resolveRecipient: async () => ({ scope: 'merchant_store', merchantId: 7, storeId: 9, token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi', chatId: '-100123' }),
     sendMessage: async () => { throw Object.assign(new Error('Telegram 消息发送失败（HTTP 429）'), { retryAfterSeconds: 120 }); }
   });
   assert.equal(floodResult[0].state, 'retry');
