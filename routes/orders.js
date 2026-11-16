@@ -9,7 +9,7 @@ const { resolveOrderStoreId } = require("../server/services/order-store-scope");
 const { hashSessionToken } = require('../server/services/session-token');
 const { safeErrorMetadata } = require('../server/middleware/safe-error-metadata');
 const { toMoneyCents, hasActiveKhqr, calculateOrderTotalCents } = require('../server/services/order-financial');
-const { enqueueSystemAdminTelegramNotification, enqueueCustomerTelegramNotification, enqueueStoreAdminTelegramNotification } = require('../server/services/telegram-notification-enqueue');
+const { enqueueCustomerTelegramNotification, enqueueStoreAdminTelegramNotification } = require('../server/services/telegram-notification-enqueue');
 
 function parsePositiveOrderRouteId(value) {
   if (typeof value !== 'string' && typeof value !== 'number') return null;
@@ -574,11 +574,6 @@ app.post('/api/orders', async (req, res) => {
           }
         }
         const store = await getAsync('SELECT name, merchant_id FROM stores WHERE id=?', [finalStoreId]);
-        await enqueueSystemAdminTelegramNotification({
-          getAsync,
-          eventKey: `order:${result.lastID}:created`,
-          event: { type: 'order.created', storeName: store?.name || `Store ${finalStoreId}`, orderNo, amount: calculatedTotal, currency: 'USD', note }
-        });
         await enqueueCustomerTelegramNotification({
           allAsync,
           customerTokenHash: customerTokenHash,
@@ -842,11 +837,6 @@ app.put('/api/orders/:id(\\d+)', requireAdminOrWaiter, async (req, res) => {
       }
       if (status === 'done' && req.isAdmin) {
         const store = await getAsync('SELECT name, merchant_id FROM stores WHERE id=? AND merchant_id=?', [orderStoreId, req.merchantId]);
-        await enqueueSystemAdminTelegramNotification({
-          getAsync,
-          eventKey: `order:${id}:settled`,
-          event: { type: 'order.settled', storeName: store?.name || `Store ${orderStoreId}`, orderNo: lockedOrder.order_no || String(id), amount: calculatedTotal, currency: 'USD' }
-        });
         await enqueueCustomerTelegramNotification({
           allAsync,
           customerTokenHash: lockedOrder.customer_token,
