@@ -1170,7 +1170,7 @@ module.exports = function(app, deps) {
           merchantId: store?.merchant_id,
           storeId: sid,
           eventKey: `order:${orderId}:settled:store`,
-          event: { type: 'order.settled', storeName: store?.name || `Store ${sid}`, orderNo: lockedOrder.order_no || String(orderId), amount: Number(lockedOrder.total), currency: 'USD' }
+          event: { type: 'order.settled', storeName: store?.name || `Store ${sid}`, orderNo: lockedOrder.order_no || String(orderId), tableName: lockedOrder.table_name, amount: Number(lockedOrder.total), currency: 'USD' }
         });
       });
       io.to('kitchen-' + sid).emit('order:settled', { orderId });

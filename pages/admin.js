@@ -738,7 +738,7 @@ function applyAdminLanguage() {
             _opt('orderResetPeriod', 2, 'orderNoResetYearlyFull');
             _opt('orderResetPeriod', 3, 'orderNoResetNeverFull');
 
-            // 桌号状态（3 项）
+            // 座号状态（3 项）
             _opt('editTableStatus', 0, 'available');
             _opt('editTableStatus', 1, 'occupied');
             _opt('editTableStatus', 2, 'reserved');

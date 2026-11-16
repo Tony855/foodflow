@@ -31,5 +31,5 @@ test('assertTableExists loads getAsync lazily and validates the requested store 
 });
 
 test('assertTableExists rejects an empty table before loading database helpers', async () => {
-  await assert.rejects(assertTableExists('  ', 7), /请选择桌号/);
+  await assert.rejects(assertTableExists('  ', 7), /请选择座号/);
 });

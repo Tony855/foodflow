@@ -53,7 +53,7 @@ module.exports = function(app, deps) {
       const storeId = Number(req.storeId);
       if (!Number.isSafeInteger(storeId) || storeId <= 0) return res.status(403).json({ error: '无权访问该店铺' });
       const table = await getAsync('SELECT name, store_id FROM tables WHERE name=? AND store_id=?', [req.params.table, storeId]);
-      if (!table) return res.status(404).json({ error: '桌号不存在' });
+      if (!table) return res.status(404).json({ error: '座号不存在' });
       const url = `${req.protocol}://${req.get('host')}/?table=${encodeURIComponent(table.name)}`;
       const qrDataUrl = await QRCode.toDataURL(url);
       res.json({ qrDataUrl, url, table: table.name });
@@ -65,7 +65,7 @@ module.exports = function(app, deps) {
       const tableId = parsePositiveRouteId(req.params.id);
       if (tableId === null) return res.status(400).json({ error: '桌台编号无效' });
       const table = await getAsync('SELECT name, qr_token, store_id FROM tables WHERE id = ? AND store_id = ?', [tableId, req.storeId]);
-      if (!table) return res.status(404).json({ error: '桌号不存在' });
+      if (!table) return res.status(404).json({ error: '座号不存在' });
       const store = await getAsync('SELECT s.name FROM stores s JOIN merchants m ON m.id=s.merchant_id WHERE s.id=? AND s.active=1 AND m.status=1', [table.store_id]);
       if (!store) return res.status(404).json({ error: '店铺不存在或已停用' });
       const url = `${req.protocol}://${req.get('host')}/?token=${encodeURIComponent(table.qr_token)}`;

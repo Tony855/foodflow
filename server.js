@@ -1292,12 +1292,12 @@ async function initDatabase() {
     }
     console.log('  + 已创建默认菜品：10道示例菜品');
 
-    // 默认桌号
+    // 默认座号
     const defaultTables = ['A01', 'A02', 'A03', 'A04', 'A05', 'B01', 'B02', 'B03', 'B04', 'B05'];
     for (const tableName of defaultTables) {
       await runAsync('INSERT INTO tables (name, status, store_id, merchant_id) VALUES (?, ?, ?, ?)', [tableName, 'available', defaultStoreId, defaultMerchantId]);
     }
-    console.log('  + 已创建默认桌号：A01-A05, B01-B05');
+    console.log('  + 已创建默认座号：A01-A05, B01-B05');
 
     // 默认服务员
     const wc = DEFAULT_CREDENTIALS.waiter;

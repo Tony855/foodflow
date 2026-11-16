@@ -104,7 +104,7 @@
     const titleEl = $('#waiterTitle'); if (titleEl) titleEl.textContent = t('title', null, '🍴 FoodFlow');
     const logoutEl = $('#logoutBtn'); if (logoutEl) logoutEl.title = t('logout', null, '退出');
     const langEl = $('#waiterLang'); if (langEl) langEl.value = waiterLang;
-    if (!state.currentTable) { const badge = $('#currentTableBadge'); if (badge) badge.textContent = t('currentTable', null, '当前桌号') + ': '; }
+    if (!state.currentTable) { const badge = $('#currentTableBadge'); if (badge) badge.textContent = t('currentTable', null, '当前座号') + ': '; }
     const submitBtn = $('#submitBtn'); if (submitBtn) submitBtn.textContent = t('submitOrder', null, '提交订单');
     const confirmCancelBtn = $('#confirmCancelBtn'); if (confirmCancelBtn) confirmCancelBtn.textContent = t('cancel', null, '取消');
     const confirmOkBtn = $('#confirmOkBtn'); if (confirmOkBtn) confirmOkBtn.textContent = t('confirm', null, '确定');
@@ -630,7 +630,7 @@
       container.innerHTML = filtered.map(o => `
         <div onclick="showOrderDetail(${o.id})" style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;transition:all .2s;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <div style="font-weight:700;font-size:15px;">${esc(o.order_no || ("#"+o.id))} ${t('table', null, '桌号')} ${esc(o.table) || '-'}</div>
+            <div style="font-weight:700;font-size:15px;">${esc(o.order_no || ("#"+o.id))} ${t('table', null, '座号')} ${esc(o.table) || '-'}</div>
             <span style="background:${o.status === 'done' ? '#27ae60' : o.status === 'canceled' ? '#95a5a6' : '#f39c12'};color:#fff;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600;">${statusMap[o.status] || esc(o.status)}</span>
           </div>
           <div style="color:#666;font-size:13px;">${SLF.utils.formatDateTime(o.createdAt)}</div>
@@ -654,7 +654,7 @@
     const statusMap = { pending: t('pending', null, '制作中'), done: t('completed', null, '已完成'), canceled: t('canceled', null, '已取消') };
     content.innerHTML = `
       <div style="margin-bottom:15px;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#666;">${t('table', null, '桌号')}</span><span style="font-weight:600;">${esc(order.table) || '-'}</span></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#666;">${t('table', null, '座号')}</span><span style="font-weight:600;">${esc(order.table) || '-'}</span></div>
         <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#666;">${t('status', null, '状态')}</span><span style="font-weight:600;">${statusMap[order.status] || esc(order.status)}</span></div>
         <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#666;">${t('orderTime', null, '下单时间')}</span><span>${SLF.utils.formatDateTime(order.createdAt)}</span></div>
         ${order.note ? `<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#666;">${t('note', null, '备注')}</span><span>${esc(order.note)}</span></div>` : ''}
@@ -708,7 +708,7 @@
     waiterAutoRefreshTimer = null;
   }
 
-  // 转移桌号
+  // 转移座号
   let transferFromTable = null;
   window.showTransferModal = function(tableName) {
     transferFromTable = tableName;
@@ -771,7 +771,7 @@
         ? `<div class="table-card-actions">${newBtn}${transferBtn}</div>`
         : '';
       return `<div class="table-card" data-open-table="${esc(table.name)}"><div class="name"><span class="name-left">🍽️ ${esc(table.name)} <span class="status ${statusClass}">${statusText}</span></span>${actions}</div><div class="bill">${bill(table)}</div></div>`;
-    }).join('') || `<div style="color:#c8c8d0;text-align:center;padding:40px;grid-column:1/-1;">${state.tableSearchQuery || state.tableFilter !== 'all' ? '🔍 ' + t('noData', null, '无匹配结果') : t('noTables', null, '暂无桌号')}</div>`;
+    }).join('') || `<div style="color:#c8c8d0;text-align:center;padding:40px;grid-column:1/-1;">${state.tableSearchQuery || state.tableFilter !== 'all' ? '🔍 ' + t('noData', null, '无匹配结果') : t('noTables', null, '暂无座号')}</div>`;
     document.querySelectorAll('.table-card[data-open-table]').forEach(card => {
       card.addEventListener('click', function(e) {
         if (e.target.closest('.table-card-actions')) return;
@@ -833,7 +833,7 @@
         state.cartMeta[itemId] = menuItem || i;
       });
     }
-    let tableLabel = '<span data-i18n="currentTable">' + t('currentTable', null, '当前桌号') + '</span>：' + esc(table);
+    let tableLabel = '<span data-i18n="currentTable">' + t('currentTable', null, '当前座号') + '</span>：' + esc(table);
     // 有订单时显示订单号
     if (order && (order.order_no || order.id)) {
       const orderNoText = order.order_no || ('#' + order.id);
@@ -859,7 +859,7 @@
   }
 
   function showOrderSelect(tableOrders) {
-    $('#orderSelectTitle').textContent = t('currentTable', null, '当前桌号') + '：' + state.currentTable + ' - ' + t('selectOrder', null, '选择订单');
+    $('#orderSelectTitle').textContent = t('currentTable', null, '当前座号') + '：' + state.currentTable + ' - ' + t('selectOrder', null, '选择订单');
     const labels = buildSessionLabels(tableOrders);
     const listEl = $('#orderSelectList');
     const canSettle = state.waiter && state.waiter.can_complete_order;
@@ -1030,7 +1030,7 @@
     if (_submittingWaiterOrder) return;
     _submittingWaiterOrder = true;
     try {
-    if (!state.currentTable) { SLF.ui.toast(t('noTables', null, '暂无桌号')); _submittingWaiterOrder = false; return; }
+    if (!state.currentTable) { SLF.ui.toast(t('noTables', null, '暂无座号')); _submittingWaiterOrder = false; return; }
     showConfirm(t('confirmSubmit', null, '确认提交此订单？'), async function () {
       const cartItems = Object.entries(state.cart).filter(([id, q]) => q > 0).map(([id, q]) => {
         const m = state.menu.find(x => x.id === +id);

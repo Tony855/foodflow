@@ -13,7 +13,7 @@ async function loadTables() {
   const list = await api('/tables');
   list.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' }));
   ctx.setTables(list);
-  // 同时获取未结算订单，计算桌号状态
+  // 同时获取未结算订单，计算座号状态
   const orders = await api('/orders?status=pending');
   const statusText = { available: L('available'), occupied: L('occupied'), reserved: L('reserved') };
   $('#tables').innerHTML = list.map(t => {

@@ -66,7 +66,7 @@ app.post('/api/orders/:id/transfer', requireAdminOrWaiter, requireOrderTransferA
     const orderId = parsePositiveOrderRouteId(req.params.id);
     const targetTable = typeof req.body?.target_table === 'string' ? req.body.target_table.trim() : '';
     if (orderId === null || !targetTable || targetTable.length > 50) {
-      return res.status(400).json({ error: '订单或目标桌号无效' });
+      return res.status(400).json({ error: '订单或目标座号无效' });
     }
 
     const initialOrder = await getAsync(
@@ -75,7 +75,7 @@ app.post('/api/orders/:id/transfer', requireAdminOrWaiter, requireOrderTransferA
     );
     if (!initialOrder) return res.status(404).json({ error: '订单不存在' });
     if (!initialOrder.table_name || initialOrder.table_name === targetTable) {
-      return res.status(400).json({ error: '目标桌与当前桌相同或当前桌号无效' });
+      return res.status(400).json({ error: '目标座号与当前座号相同或当前座号无效' });
     }
 
     let oldTable = '';
@@ -378,7 +378,7 @@ app.post('/api/orders', async (req, res) => {
     const isWaiter = Boolean(waiter && waiter.can_order);
     if (waiter && !waiter.can_order) return res.status(403).json({ error: '该服务员没有下单权限' });
 
-    // ---------- 2. 会话/桌号校验 ----------
+    // ---------- 2. 会话/座号校验 ----------
     let sessionToken = null;
     let sessionTokenHash = null;
     let customerToken = '';
@@ -387,7 +387,7 @@ app.post('/api/orders', async (req, res) => {
     let table;
     const requestedTable = typeof req.body.table === 'string' ? req.body.table.trim() : '';
     if (!requestedTable || requestedTable.length > 50) {
-      return res.status(400).json({ error: '桌号无效' });
+      return res.status(400).json({ error: '座号无效' });
     }
     if (!isAdmin && !isWaiter) {
       const token = typeof req.body.sessionToken === 'string' ? req.body.sessionToken.trim() : '';
@@ -411,7 +411,7 @@ app.post('/api/orders', async (req, res) => {
       );
       if (!activeStore) return res.status(404).json({ error: '店铺不存在或已停用，暂时无法下单' });
       table = await assertTableExists(requestedTable, sessionStoreId);
-      if (session.table_name !== table) return res.status(403).json({ error: '扫码桌号与下单桌号不一致' });
+      if (session.table_name !== table) return res.status(403).json({ error: '扫码座号与下单座号不一致' });
       sessionToken = token;
       sessionTokenHash = hashSessionToken(token);
     } else {
@@ -433,7 +433,7 @@ app.post('/api/orders', async (req, res) => {
     if (!Number.isSafeInteger(storeId) || storeId <= 0) {
       return res.status(404).json({ error: '桌台不存在或不属于当前门店' });
     }
-    if (isWaiter && waiter.store_id !== storeId) return res.status(403).json({ error: '不能为其他店铺的桌号下单' });
+    if (isWaiter && waiter.store_id !== storeId) return res.status(403).json({ error: '不能为其他店铺的座号下单' });
     const finalStoreId = sessionStoreId || storeId;
 
     // ---------- 4. 菜品规范化与上限校验 ----------
@@ -525,7 +525,7 @@ app.post('/api/orders', async (req, res) => {
           [table, finalStoreId]
         );
         if (!lockedTable) {
-          throw Object.assign(new Error('桌号已不存在，请重新扫码或刷新桌台'), { status: 404 });
+          throw Object.assign(new Error('座号已不存在，请重新扫码或刷新座号'), { status: 404 });
         }
         const activeStore = await getAsync(
           'SELECT s.id FROM stores s JOIN merchants m ON m.id=s.merchant_id WHERE s.id=? AND s.active=1 AND m.status=1',
@@ -587,7 +587,7 @@ app.post('/api/orders', async (req, res) => {
           merchantId: store?.merchant_id,
           storeId: finalStoreId,
           eventKey: `order:${result.lastID}:created:store`,
-          event: { type: 'order.created', storeName: store?.name || `Store ${finalStoreId}`, orderNo, amount: calculatedTotal, currency: 'USD', note }
+          event: { type: 'order.created', storeName: store?.name || `Store ${finalStoreId}`, orderNo, tableName: table, amount: calculatedTotal, currency: 'USD', note }
         });
         return { orderId: result.lastID, orderNo };
       });
@@ -850,7 +850,7 @@ app.put('/api/orders/:id(\\d+)', requireAdminOrWaiter, async (req, res) => {
           merchantId: store?.merchant_id,
           storeId: orderStoreId,
           eventKey: `order:${id}:settled:store`,
-          event: { type: 'order.settled', storeName: store?.name || `Store ${orderStoreId}`, orderNo: lockedOrder.order_no || String(id), amount: calculatedTotal, currency: 'USD' }
+          event: { type: 'order.settled', storeName: store?.name || `Store ${orderStoreId}`, orderNo: lockedOrder.order_no || String(id), tableName: lockedOrder.table_name, amount: calculatedTotal, currency: 'USD' }
         });
       }
 

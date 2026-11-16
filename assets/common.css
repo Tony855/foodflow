@@ -344,9 +344,9 @@ textarea {
 }
 
 /* ---------- 页头 Header（跨页面统一规则） ----------
-   移动端：logo、店铺信息、桌号信息、操作按钮按原有页面样式排列
+   移动端：logo、店铺信息、座号信息、操作按钮按原有页面样式排列
    桌面端（>=769px）：logo 绝对定位水平居中；
-   店铺信息 + 桌号信息（.header-left）与右侧按钮（.header-right）
+   店铺信息 + 座号信息（.header-left）与右侧按钮（.header-right）
    整体靠右对齐，紧挨在一起
    用 !important 是为了确保覆盖各页面内联 <style> 中残留的旧布局规则，
    common.css 在 <head> 中排在最后加载，配合 !important 可稳定生效 */

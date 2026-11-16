@@ -64,7 +64,7 @@
                 <div class="sidebar-store-code" id="sidebarStoreCode"></div>
             </div>
             <button class="nav-item active" data-module="menu" data-perm="can_manage_menu"><span class="nav-icon">📖</span> <span data-i18n-nav="menu">菜品管理</span></button>
-            <button class="nav-item" data-module="tables" data-perm="can_manage_table"><span class="nav-icon">🪑</span> <span data-i18n-nav="tables">桌号管理</span></button>
+            <button class="nav-item" data-module="tables" data-perm="can_manage_table"><span class="nav-icon">🪑</span> <span data-i18n-nav="tables">座号管理</span></button>
             <button class="nav-item" data-module="orders" data-perm="can_manage_order"><span class="nav-icon">🧾</span> <span data-i18n-nav="orders">订单管理</span></button>
             <button class="nav-item" data-module="stores" data-perm="can_manage_store"><span class="nav-icon">🏪</span> <span data-i18n-nav="stores">店铺管理</span></button>
             <button class="nav-item" data-module="reservations"><span class="nav-icon">📅</span> <span data-i18n-nav="reservations">预约管理</span></button>
@@ -102,12 +102,12 @@
                 </div>
             </section>
 
-            <!-- 桌号管理 -->
+            <!-- 座号管理 -->
             <section class="panel module-panel" id="module-tables">
-                <h2 id="tablePanelTitle">桌号管理</h2>
+                <h2 id="tablePanelTitle">座号管理</h2>
                 <form id="tableForm" class="form">
-                    <input id="tableName" placeholder="桌号，例如 A06" required>
-                    <button id="addTableBtn">新增桌号</button>
+                    <input id="tableName" placeholder="座号，例如 A06" required>
+                    <button id="addTableBtn">新增座号</button>
                 </form>
                 <div id="tables" class="table-grid"></div>
             </section>
@@ -132,7 +132,7 @@
                         </button>
                     </div>
                     <div class="order-toolbar">
-                        <input type="text" id="orderTableSearch" class="order-search-input" placeholder="🔍 请输入桌号或订单号查询" data-i18n-placeholder="orderSearchInputPlaceholder" oninput="filterOrders()">
+                        <input type="text" id="orderTableSearch" class="order-search-input" placeholder="🔍 请输入座号或订单号查询" data-i18n-placeholder="orderSearchInputPlaceholder" oninput="filterOrders()">
                         <button id="openOrderBtn" onclick="openOrderForm()">➕ 新增订单</button>
                     </div>
                 </div>
@@ -721,7 +721,7 @@
         <div class="order-modal-card">
             <button class="modal-close" onclick="closeOrderForm()">✕</button>
             <h2 id="orderModalTitle">新增订单</h2>
-            <div class="order-field"><label id="orderTableLabel">桌号</label><select id="orderTable"></select></div>
+            <div class="order-field"><label id="orderTableLabel">座号</label><select id="orderTable"></select></div>
             <div class="order-field">
                 <label id="orderDishListLabel">菜品清单</label>
                 <div id="orderItems"></div>
@@ -736,8 +736,8 @@
     <div class="order-modal" id="tableModal">
         <div class="order-modal-card">
             <button class="modal-close" onclick="closeTableForm()">✕</button>
-            <h2 id="tableModalTitle" data-i18n="editTable">编辑桌号</h2>
-            <div class="order-field"><label id="tableNameLabel">桌号名称</label><input id="editTableName" maxlength="20"></div>
+            <h2 id="tableModalTitle" data-i18n="editTable">编辑座号</h2>
+            <div class="order-field"><label id="tableNameLabel">座号名称</label><input id="editTableName" maxlength="20"></div>
             <div class="order-field"><label id="tableStatusLabel">状态</label><select id="editTableStatus"><option value="available"><span data-i18n="available">空闲</span><option value="occupied"><span data-i18n="occupied">已占</span><option value="reserved"><span data-i18n="reserved">已预订</span></select></div>
             <div class="order-modal-actions"><button id="tableCancelBtn" onclick="closeTableForm()" data-i18n="cancel">取消</button><button class="primary" id="tableSaveBtn" data-i18n="save">保存</button></div>
         </div>
@@ -1023,8 +1023,8 @@
     </div>
 </div>
 
-<script src="assets/admin-bundle.js?v=283"></script>
-<script src="pages/admin.js?v=282"></script>
+<script src="assets/admin-bundle.js?v=1794808583"></script>
+<script src="pages/admin.js?v=1794808583"></script>
 <script>
 /* openDisplayPreview bind */
 document.addEventListener('DOMContentLoaded', function() {

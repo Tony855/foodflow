@@ -780,7 +780,7 @@ async function loadAuditLogs() {
     };
     const targetTypeNames = {
       'merchant': '商户', 'merchant_admin': t('admin'), 'store': '店铺', 'menu': '菜品',
-      'category': '分类', 'waiter': t('waiter'), 'table': '桌号', 'currency': '货币',
+      'category': '分类', 'waiter': t('waiter'), 'table': '座号', 'currency': '货币',
       'order': '订单', 'settings': '设置', 'system': '系统', 'super_admin': t('superAdmin')
     };
     tbody.innerHTML = logs.map(log => {

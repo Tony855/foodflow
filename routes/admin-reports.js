@@ -294,7 +294,7 @@ module.exports = function(app, deps) {
           [storeId]
         );
         filename = `orders_${new Date().toISOString().slice(0,10)}.csv`;
-        headers = ['订单号','桌号','状态','原金额','累计退款','净收入','备注','下单时间'];
+        headers = ['订单号','座号','状态','原金额','累计退款','净收入','备注','下单时间'];
       } else if (type === 'menu') {
         rows = await allAsync('SELECT * FROM menus WHERE store_id=? ORDER BY id', [storeId]);
         filename = `menu_${new Date().toISOString().slice(0,10)}.csv`;
@@ -396,7 +396,7 @@ module.exports.attachAdvancedExport = function(app, deps) {
         sql += ' ORDER BY createdAt DESC';
         const rows = await allAsync(sql, params);
 
-        csv = '\uFEFF订单ID,订单号,桌号,原金额,累计退款,净收入,状态,支付方式,备注,下单时间,结算时间\n';
+        csv = '\uFEFF订单ID,订单号,座号,原金额,累计退款,净收入,状态,支付方式,备注,下单时间,结算时间\n';
         for (const r of rows) {
           csv += csvRow([r.id, r.order_no || '', r.table_name || '', r.total, r.refund_amount, r.net_total, r.status, r.pay_method || '', r.note || '', r.createdAt, r.settled_at || '']) + '\n';
         }
@@ -440,7 +440,7 @@ module.exports.attachAdvancedExport = function(app, deps) {
           ORDER BY revenue DESC
         `, [storeId, startIso, endIso, ...statuses]);
 
-        csv = '\uFEFF桌号,订单数,总营收,客单价\n';
+        csv = '\uFEFF座号,订单数,总营收,客单价\n';
         for (const r of rows) {
           csv += csvRow([r.table_name, r.order_count, r.revenue, Number(r.avg_order || 0).toFixed(2)]) + '\n';
         }
