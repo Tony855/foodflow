@@ -10,7 +10,7 @@ test('exception workflow schema creates tenant-scoped case and immutable event t
     if (sql.includes('SHOW COLUMNS FROM financial_reconciliation_exception_cases')) {
       return ['id','merchant_id','store_id','batch_id','item_id','status','assigned_admin_id',
         'assigned_admin_username','resolution_note','created_by_admin_id','updated_by_admin_id','created_at','updated_at']
-        .map(Field => ({ Field }));
+        .map(Field => ({ Field, Null: 'NO' }));
     }
     if (sql.includes('SHOW COLUMNS FROM financial_reconciliation_exception_events')) {
       return ['id','merchant_id','store_id','batch_id','item_id','actor_admin_id','actor_username','action',

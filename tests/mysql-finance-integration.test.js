@@ -2942,6 +2942,16 @@ test('MySQL integration: finance unique-index migrations repair populated legacy
     assert.equal(Number(rows[0].row_count), 1, table + ' data must survive migration reruns');
   }
 
+  // Nullable legacy key columns cannot enforce true idempotency with MySQL UNIQUE semantics.
+  await runAsync('ALTER TABLE financial_reconciliation_exception_alerts DROP INDEX unique_finance_exception_alert');
+  await runAsync('ALTER TABLE financial_reconciliation_exception_alerts MODIFY COLUMN alert_type VARCHAR(24) NULL');
+  await assert.rejects(
+    ensureFinancialExceptionAlertSchema({ runAsync, allAsync }),
+    error => error.code === 'FINANCE_SCHEMA_NULLABLE_KEY_COLUMN'
+  );
+  await runAsync('ALTER TABLE financial_reconciliation_exception_alerts MODIFY COLUMN alert_type VARCHAR(24) NOT NULL');
+  await ensureFinancialExceptionAlertSchema({ runAsync, allAsync });
+
   // Same-name schema drift must not be mistaken for a valid uniqueness guarantee.
   await runAsync('ALTER TABLE financial_month_close_periods DROP INDEX unique_financial_month_period');
   await runAsync('CREATE INDEX unique_financial_month_period ON financial_month_close_periods (merchant_id)');

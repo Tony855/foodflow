@@ -19,8 +19,8 @@ const makeIndexes = (name, columns) => columns.map((Column_name, index) => ({
 test('exception alert migration verifies the exact deduplication and idempotency indexes', async () => {
   const writes = [];
   const allAsync = async sql => {
-    if (sql === 'SHOW COLUMNS FROM financial_reconciliation_exception_alerts') return alertColumns.map(Field => ({ Field }));
-    if (sql === 'SHOW COLUMNS FROM financial_reconciliation_exception_alert_events') return eventColumns.map(Field => ({ Field }));
+    if (sql === 'SHOW COLUMNS FROM financial_reconciliation_exception_alerts') return alertColumns.map(Field => ({ Field, Null: 'NO' }));
+    if (sql === 'SHOW COLUMNS FROM financial_reconciliation_exception_alert_events') return eventColumns.map(Field => ({ Field, Null: 'NO' }));
     if (sql === 'SHOW INDEX FROM financial_reconciliation_exception_alerts') {
       return makeIndexes('unique_finance_exception_alert', ['merchant_id','store_id','item_id','alert_type','sla_hours']);
     }

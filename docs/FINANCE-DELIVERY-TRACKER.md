@@ -147,7 +147,7 @@ For each batch, update this tracker with the merged PR and commit, the open PR a
 ## 2026-11-16 finance schema constraint audit
 
 - New migration audit found that the month-close migration accepted an index based only on its name, while exception-case/event and SLA-alert/event migrations checked required columns but did not verify their unique idempotency/deduplication indexes on an existing table.
-- The provider-neutral finance schema guard now validates the exact ordered UNIQUE index definition, recognizes an equivalent exact index under another name, fails closed on same-name schema drift or duplicate legacy rows, and re-reads a concurrent startup winner before accepting it.
+- The provider-neutral finance schema guard now validates non-null key columns and the exact ordered UNIQUE index definition, recognizes an equivalent exact index under another name, fails closed on same-name schema drift or duplicate legacy rows, and re-reads a concurrent startup winner before accepting it.
 - Applied to month-close period/event uniqueness, exception case/event idempotency, and SLA alert/alert-event deduplication. Existing rows are retained; no data rewrite or provider-specific payment behavior is introduced.
-- Validation added for identifier safety, exact index shape, alternate legacy index names, duplicate legacy data, concurrent DDL races, and a populated legacy-schema MySQL/MariaDB migration/rerun scenario.
+- Validation added for identifier safety, non-null key columns, exact index shape, alternate legacy index names, duplicate legacy data, concurrent DDL races, and a populated legacy-schema MySQL/MariaDB migration/rerun scenario.
 - No production database migration, deployment, or financial operation was performed in this batch.

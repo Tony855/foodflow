@@ -51,6 +51,25 @@ async function ensureFinanceUniqueIndex({
     throw new TypeError('columns must not contain duplicate identifiers');
   }
 
+  const columnRows = await allAsync('SHOW COLUMNS FROM ' + tableName);
+  if (!Array.isArray(columnRows)) throw new TypeError('SHOW COLUMNS must return an array');
+  const columnsByName = new Map(columnRows.map(column => [column.Field, column]));
+  for (const columnName of safeColumns) {
+    const column = columnsByName.get(columnName);
+    if (!column) {
+      throw schemaError(
+        'FINANCE_SCHEMA_KEY_COLUMN_MISSING',
+        'finance schema key column ' + columnName + ' is missing from ' + tableName
+      );
+    }
+    if (String(column.Null || '').toUpperCase() !== 'NO') {
+      throw schemaError(
+        'FINANCE_SCHEMA_NULLABLE_KEY_COLUMN',
+        'finance schema key column ' + columnName + ' on ' + tableName + ' must be NOT NULL'
+      );
+    }
+  }
+
   const readIndexes = async () => {
     const rows = await allAsync('SHOW INDEX FROM ' + tableName);
     if (!Array.isArray(rows)) throw new TypeError('SHOW INDEX must return an array');

@@ -21,13 +21,17 @@ function fixture({
   indexes = [],
   duplicates = [],
   createError = null,
-  afterRaceIndexes = []
+  afterRaceIndexes = [],
+  nullableColumns = []
 } = {}) {
   let currentIndexes = indexes.map(row => ({ ...row }));
   const reads = [];
   const writes = [];
   const allAsync = async sql => {
     reads.push(sql);
+    if (sql === 'SHOW COLUMNS FROM ' + tableName) {
+      return columns.map(Field => ({ Field, Null: nullableColumns.includes(Field) ? 'YES' : 'NO' }));
+    }
     if (sql === 'SHOW INDEX FROM ' + tableName) return currentIndexes.map(row => ({ ...row }));
     if (sql.includes('FROM ' + tableName) && sql.includes('GROUP BY')) return duplicates;
     throw new Error('unexpected SQL: ' + sql);
@@ -114,5 +118,12 @@ test('rejects unsafe SQL identifiers before issuing database queries', async () 
   const db = fixture({ tableName: 'finance_events; DROP TABLE users' });
   await assert.rejects(db.run(), /simple SQL identifier/);
   assert.deepEqual(db.reads, []);
+  assert.deepEqual(db.writes, []);
+});
+
+test('fails closed when any uniqueness-key column is nullable', async () => {
+  const db = fixture({ nullableColumns: ['idempotency_key'] });
+  await assert.rejects(db.run(), error => error.code === 'FINANCE_SCHEMA_NULLABLE_KEY_COLUMN');
+  assert.equal(db.reads.length, 1, 'nullable key columns are rejected before index inspection');
   assert.deepEqual(db.writes, []);
 });
