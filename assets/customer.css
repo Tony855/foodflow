@@ -964,3 +964,72 @@
   color: var(--primary-dark, #c94a2a);
   font-weight: 600;
 }
+
+
+/* FoodFlow customer visual refresh — intentionally scoped to the customer page. */
+.ff-customer {
+  --customer-ink: #252b36;
+  --customer-muted: #7b8492;
+  --customer-line: rgba(38, 48, 64, .08);
+  background: linear-gradient(180deg, #fff8f4 0%, #f7f8fc 46%, #f2f5fa 100%);
+  color: var(--customer-ink);
+}
+.ff-customer .header {
+  background: linear-gradient(120deg, #ff9a62 0%, #f06443 58%, #dc4b36 100%);
+  box-shadow: 0 8px 26px rgba(208, 79, 51, .18);
+}
+.ff-customer .category-tabs {
+  border-bottom: 1px solid var(--customer-line);
+  box-shadow: 0 5px 18px rgba(31, 41, 55, .035);
+}
+.ff-customer .category-tab {
+  border: 1px solid transparent;
+  font-weight: 650;
+  transition: background .18s ease, color .18s ease, transform .18s ease;
+}
+.ff-customer .category-tab:active { transform: scale(.97); }
+.ff-customer .menu-item {
+  border: 1px solid rgba(42, 52, 68, .07);
+  border-radius: 20px;
+  box-shadow: 0 5px 18px rgba(34, 44, 60, .055);
+}
+.ff-customer .menu-item:hover { box-shadow: 0 12px 28px rgba(34, 44, 60, .11); }
+.ff-customer .menu-item .img-wrap { background: linear-gradient(135deg, #fff0e7, #f0effb); }
+.ff-customer .cart-bar {
+  border: 1px solid rgba(255,255,255,.85);
+  box-shadow: 0 -8px 30px rgba(34, 44, 60, .10);
+}
+.ff-customer .cart-drawer,
+.ff-customer .order-modal-card {
+  border: 1px solid rgba(40, 50, 66, .08);
+  box-shadow: 0 18px 55px rgba(22, 30, 44, .18);
+}
+.ff-customer .order-card {
+  border: 1px solid rgba(38, 48, 64, .075);
+  border-radius: 18px;
+  box-shadow: 0 7px 22px rgba(38, 48, 64, .055);
+  overflow: hidden;
+}
+.ff-customer .order-note {
+  margin: 12px 0 4px;
+  padding: 11px 13px;
+  border: 1px solid rgba(230, 137, 48, .20);
+  border-left: 3px solid #e99a42;
+  border-radius: 12px;
+  background: #fff8ed;
+  color: #775126;
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.ff-customer .order-note strong { color: #a05e1b; }
+.ff-customer button,
+.ff-customer input,
+.ff-customer textarea { -webkit-tap-highlight-color: transparent; }
+.ff-customer :focus-visible { outline: 3px solid rgba(232, 93, 58, .28); outline-offset: 2px; }
+@media (max-width: 600px) {
+  .ff-customer .main-content { padding-top: 12px; }
+  .ff-customer .menu-grid { gap: 11px; }
+  .ff-customer .menu-item { border-radius: 16px; }
+  .ff-customer .order-card { margin-bottom: 12px; }
+}
