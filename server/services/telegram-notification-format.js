@@ -15,6 +15,8 @@ function formatTelegramBusinessNotification(event) {
   if (!store || !orderNo) throw new TypeError('业务事件缺少必要标识');
   const lines = ['🍽️ <b>FoodFlow · ' + label + '</b>', '━━━━━━━━━━━━━━━━━━',
     '🏪 <b>门店</b>：' + escapeHtml(store), '🧾 <b>订单</b>：<code>' + escapeHtml(orderNo) + '</code>'];
+  const tableName = safeField(event.tableName, 50);
+  if (tableName) lines.push('🪑 <b>桌号</b>：' + escapeHtml(tableName));
   if (event.type === 'order.created') {
     const note = safeField(event.note, 200);
     if (note) lines.push('📝 <b>顾客备注</b>：\n<blockquote>' + escapeHtml(note) + '</blockquote>');
