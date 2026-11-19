@@ -1580,8 +1580,8 @@ initDatabase().then(async () => {
     process.exit(1);
     return;
   }
-  // Notifications run by default; set the variable to 'false' only for an intentional maintenance/rollback pause.
-  if (process.env.TELEGRAM_NOTIFICATION_WORKER_ENABLED !== 'false') {
+  // Outbound Telegram delivery is opt-in; enable only after staging acceptance.
+  if (process.env.TELEGRAM_NOTIFICATION_WORKER_ENABLED === 'true') {
     stopTelegramNotificationWorker = telegramNotificationWorker.start();
     console.log('[telegram-worker] background delivery enabled');
   }

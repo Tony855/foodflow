@@ -25,7 +25,7 @@ A blank token field preserves the previously saved token. Use the explicit **Cle
 - Test delivery sends a fixed FoodFlow verification message to the configured Chat ID. It does not accept arbitrary text or a caller-supplied Telegram API URL.
 - Disabling a profile stops delivery for that profile without deleting its saved token or Chat ID. Already queued notices for a globally disabled Bot are terminally suppressed as `event_disabled`; re-enabling the Bot does not release that backlog.
 - Business notifications are delivered from a durable database outbox. Telegram network calls happen after the order/payment/refund transaction commits; retryable failures do not roll back business transactions.
-- The worker is enabled by default. Set `TELEGRAM_NOTIFICATION_WORKER_ENABLED=false` only when intentionally pausing delivery (for maintenance or rollback). Before production use, configure the Client/Admin Bot credentials and customer webhook secret, register the HTTPS webhook, and complete staging end-to-end verification. The worker uses one in-flight send at a time and stops before the database pool during graceful shutdown.
+- Outbound delivery is disabled by default. Set `TELEGRAM_NOTIFICATION_WORKER_ENABLED=true` only after configuring the Client/Admin Bot credentials, customer webhook secret and HTTPS webhook, and completing staging end-to-end verification. Keep it `false` during initial installation and staging setup. The worker uses one in-flight send at a time and stops before the database pool during graceful shutdown.
 - The Admin Bot token is global and is used only as the shared transport credential. The super-admin does not configure a business Chat ID or receive store business notifications; each store's separately configured Chat ID is the exclusive destination for that store's business messages.
 - Current business-notification delivery is store-scoped only: the Admin Bot transports messages to the matching store Chat ID, with event toggles controlling new-order, settlement, and refund notifications. Legacy queued super-admin business messages are suppressed. The Client Bot's configured Chat ID is used only for its fixed test message; private customer notices are routed only to a customer's own Telegram chat after the binding flow below.
 
@@ -49,7 +49,7 @@ Customer notifications never use the Client Bot's shared configured Chat ID. Eac
      --data-urlencode "url=${FOODFLOW_PUBLIC_URL}/api/telegram/client/webhook" \
      --data-urlencode "secret_token=${TELEGRAM_CLIENT_WEBHOOK_SECRET}"
    ```
-5. The worker starts automatically by default. Set `TELEGRAM_NOTIFICATION_WORKER_ENABLED=false` only when intentionally pausing delivery; complete staging end-to-end verification before relying on production delivery.
+5. Keep `TELEGRAM_NOTIFICATION_WORKER_ENABLED=false` while configuring the integration. After the complete staging acceptance checklist passes, explicitly set it to `true` and restart the application.
 6. A customer scans a table QR code, taps the Telegram icon in the customer page header, and opens the generated private deep link. They must press **Start** in Telegram. Returning to FoodFlow refreshes the binding state. Customers can revoke immediately from the Telegram chat at any time by sending `/stop`; this revokes all active FoodFlow customer-notification bindings belonging to that exact Telegram private user/chat.
 
 Binding details:
