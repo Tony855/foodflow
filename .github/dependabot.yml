@@ -7,3 +7,10 @@ updates:
     open-pull-requests-limit: 10
     commit-message:
       prefix: "security(deps)"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "ci(deps)"
