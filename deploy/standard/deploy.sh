@@ -71,7 +71,7 @@ case "$REPO_NAME" in
         GIT_REPO="https://github.com/Tony855/foodflow-enterprise.git"
         ;;
     *)
-        GIT_REPO="https://github.com/Tony855/shaolafang.git"
+        GIT_REPO="https://github.com/Tony855/foodflow.git"
         ;;
 esac
 
