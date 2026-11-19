@@ -62,7 +62,7 @@ if [ ! -f "$APP_DIR/server.js" ]; then
     if [ ! -f server.js ]; then
         log_info "拉取仓库到 $APP_DIR..."
     
-        REPO_URL="https://github.com/Tony855/shaolafang.git"
+        REPO_URL="https://github.com/Tony855/foodflow.git"
         log_info "使用公开仓库 HTTPS 方式拉取"
         git clone "$REPO_URL" .
     fi
