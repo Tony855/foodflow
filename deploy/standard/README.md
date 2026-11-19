@@ -48,8 +48,8 @@
 
 ```bash
 # 1. 下载代码
-git clone https://github.com/Tony855/shaolafang.git
-cd shaolafang
+git clone https://github.com/Tony855/foodflow.git
+cd foodflow
 
 # 2. 运行一键安装脚本，选择"标准版 - 单台部署"
 sudo bash install.sh
