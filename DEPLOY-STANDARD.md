@@ -1,12 +1,12 @@
 # 标准版部署指南（当前仓库）
 
-> 本指南已按 Tony855/shaolafang 当前代码和安装器重写。旧版文档曾指向独立的 foodflow-standard 仓库及旧环境变量；不要再照旧命令部署。
+> 本指南已按 Tony855/foodflow 当前代码和安装器重写。旧版文档曾指向独立的 foodflow-standard 仓库及旧环境变量；不要再照旧命令部署。
 
 ## 推荐部署
 
 ~~~bash
-git clone https://github.com/Tony855/shaolafang.git
-cd shaolafang
+git clone https://github.com/Tony855/foodflow.git
+cd foodflow
 sudo bash install.sh
 ~~~
 
