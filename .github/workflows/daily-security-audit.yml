@@ -1,0 +1,86 @@
+name: Daily Security and Quality Audit
+
+on:
+  schedule:
+    # 08:00 Cambodia time (UTC+7)
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: daily-audit-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-and-regression-audit:
+    name: Dependencies and regression suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      REDIS_URL: redis://127.0.0.1:6379/0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-fund
+
+      - name: Audit all dependencies
+        run: npm audit --audit-level=moderate
+
+      - name: Compile audit scripts
+        run: python -m py_compile scripts/audit-code.py scripts/code-audit.py scripts/i18n-audit.py
+
+      - name: Run repository code audit
+        run: python3 scripts/audit-code.py
+
+      - name: Validate translations
+        run: npm run check:lang:strict
+
+      - name: Run complete test suite
+        run: npm test
+
+  codeql:
+    name: CodeQL static security analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v4
