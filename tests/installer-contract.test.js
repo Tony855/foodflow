@@ -304,6 +304,7 @@ test('manual installation guides use the canonical repository and a non-root ser
   const install = read('INSTALL.md');
   const readme = read('README.md');
   assert.ok(install.includes('https://github.com/Tony855/foodflow.git'));
+  assert.ok(!install.includes('Tony855/shaolafang.git'), 'installer must not pull from the former repository slug');
   assert.ok(install.includes('DB_USER=foodflow'));
   assert.ok(install.includes('DB_DATABASE=foodflow_system'));
   assert.ok(install.includes('User=foodflow\nGroup=www-data'));
