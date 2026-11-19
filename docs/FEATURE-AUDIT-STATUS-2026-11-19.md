@@ -82,3 +82,20 @@
 ## 7. 进度统计规则
 
 当前不报告虚构的“完成百分比”。必须先为每个功能建立可执行验收项和权重，再按“已实现且测试通过 / 部分实现 / 未实现 / 生产验收阻塞”统计。只有有自动化或人工验收证据的功能才能计入完成。
+
+
+## 8. 2026-11-19 最新主分支复核补充
+
+本节覆盖上述原始审计基准之后的 PR #7、#8 以及 PR #8 合并后的主分支验证；若与前文旧基准 SHA 或旧待办描述冲突，以本节为准。
+
+- 最新 main：`5f58bdf45c7815966bbefa8aa84cb8fe622b99bb`。
+- 已合并 PR：#2、#3、#4、#5、#6、#7、#8；当前开放 PR：0。
+- PR #8 刷新了本审计状态文档，合并后需要再次核实其自身 post-merge 检查。
+- 最新 main 的 GitHub Actions 运行结果：
+  - Daily Security and Quality Audit run `44458740786`：CodeQL static security analysis = success；Dependencies and regression suite = skipped（该任务只在 schedule / workflow_dispatch 运行，push 触发时跳过符合 workflow 条件，不代表当日完整依赖/回归审计已执行）。
+  - CI run `44458740763`：validate、MySQL finance integration、MariaDB finance integration 10.11 / 11.4 / 11.8 / 12.3 全部 success。
+  - Installer Compatibility run `44458740772`：Debian 12 / 13、Ubuntu 22.04 / 24.04 / 26.04 全部 success。
+- 因此，最新 main 的 post-merge CI、数据库集成、CodeQL 和安装兼容矩阵已完成并通过；每日完整依赖审计仍以每日 schedule / 手动触发结果为准，不能把 push 触发时 skipped 的 job 计作成功执行。
+- 仓库仍未启用 main branch protection，Rulesets 仍需管理员在 GitHub Settings 中手动配置；不能把 PR 流程等同于服务器端分支保护。
+- 历史路线图 `LONG_TERM_IMPROVEMENT_PLAN.md` 中描述的若干待办是早期规划，不应直接视为当前事实；应结合当前代码和本审计状态文档重新核对后再执行。
+
