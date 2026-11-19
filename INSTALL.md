@@ -75,8 +75,8 @@ mysql -u root -p
 
 ```cmd
 cd C:\Users\你的用户名\Downloads
-git clone https://github.com/Tony855/shaolafang.git
-cd shaolafang
+git clone https://github.com/Tony855/foodflow.git
+cd foodflow
 ```
 
 如果没有安装 Git，可以直接从 GitHub 下载 ZIP 包并解压。
@@ -227,7 +227,7 @@ EXIT;
 ### 3.4 下载项目代码
 
 ```bash
-sudo git clone https://github.com/Tony855/shaolafang.git /opt/foodflow
+sudo git clone https://github.com/Tony855/foodflow.git /opt/foodflow
 cd /opt/foodflow
 sudo chown -R $USER:$USER /opt/foodflow
 ```
@@ -384,7 +384,7 @@ hostname -I
 首次安装默认采用最小单机模式：
 
 ```bash
-cd /opt/shaolafang
+cd /opt/foodflow
 sudo bash install.sh
 ```
 
@@ -452,8 +452,8 @@ sudo journalctl -u foodflow -f
 
 ### 步骤 3：下载代码
 ```bash
-git clone https://github.com/Tony855/shaolafang.git
-cd shaolafang
+git clone https://github.com/Tony855/foodflow.git
+cd foodflow
 ```
 
 ### 步骤 4：配置 .env
