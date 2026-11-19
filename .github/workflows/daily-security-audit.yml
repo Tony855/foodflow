@@ -63,6 +63,9 @@ jobs:
       - name: Run repository code audit
         run: python3 scripts/audit-code.py
 
+      - name: Check duplicate routes and cross-file functions
+        run: python3 scripts/code-audit.py
+
       - name: Validate translations
         run: npm run check:lang:strict
 
