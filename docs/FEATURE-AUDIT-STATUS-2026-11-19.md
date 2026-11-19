@@ -2,7 +2,7 @@
 
 > 审计日期：2026-11-19  
 > 仓库：`Tony855/foodflow`  
-> 基准 main：`3eea5f62a3e6d222e7efc68b4870d37b8a4e9f46`  
+> 基准 main：`331e30db62e1f2846813e2ad07c142024dcc22de`  
 > 本文件区分“代码已实现”“自动化测试通过”和“真实生产验收”，不能仅凭代码或文档存在就判定功能已完成。
 
 ## 1. 本轮已合并的治理修复
@@ -13,6 +13,8 @@
 | #5 | `e8d2304e45e810941f96f4c71b062d5c0cef79a8` | Telegram 外发 worker 改为显式 opt-in，首次安装默认关闭 |
 | #3 | `752cb0b71a44f7ccd6acb4ac9683fcce6fec90f8` | 安装器、升级脚本、部署文档统一使用 Tony855/foodflow |
 | #4 | `3eea5f62a3e6d222e7efc68b4870d37b8a4e9f46` | 每日完整审计、每日安装兼容矩阵、重复路由/函数审计、GitHub Actions Dependabot |
+| #6 | `81707ea6b9ccf763b7be32c725a936e6defbb095` | 新增当前功能与工程审计状态追踪文档 |
+| #7 | `331e30db62e1f2846813e2ad07c142024dcc22de` | Dependabot 将 GitHub Actions checkout 从 v6 更新至 v7，所有适用检查通过 |
 
 ## 2. 自动化审计机制
 
@@ -32,6 +34,7 @@
 - 生产依赖审计：CI 通过。
 - CodeQL 分析作业：通过。作业成功不等于声明安全告警数量为零。
 - 安装兼容矩阵：Debian 12、Debian 13、Ubuntu 22.04、24.04、26.04 均通过。
+- 最新 main `331e30db62e1f2846813e2ad07c142024dcc22de` 的合并后 CI、CodeQL/每日安全工作流和五种 Linux 安装兼容工作流均已通过；CI 中 MySQL 8.4 与 MariaDB 10.11/11.4/11.8/12.3 全部成功。
 - 静态审计：306 个 JavaScript 文件语法通过；8 个前端页面的内联事件处理器对账通过；8 个页面的静态 DOM ID 对账通过。
 - 后端：23 个路由文件全部被 server.js 注册；48 个 service、7 个 middleware、3 个 db、7 个 config 模块均被引用。
 - API 对账：102 个前端 API 调用均能找到后端定义（静态识别到 170 个后端接口定义）。
