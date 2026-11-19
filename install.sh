@@ -518,7 +518,7 @@ install_single() {
         cd "$DEPLOY_TARGET"
         # 如果有 GITHUB_TOKEN，用带 token 的地址 pull
         if [ -n "$GITHUB_TOKEN" ]; then
-            git pull "https://${GITHUB_TOKEN}@github.com/Tony855/shaolafang.git" main || log_warn "git pull 失败，继续使用现有代码"
+            git pull "https://${GITHUB_TOKEN}@github.com/Tony855/foodflow.git" main || log_warn "git pull 失败，继续使用现有代码"
         else
             git pull origin main || log_warn "git pull 失败，继续使用现有代码"
         fi
@@ -552,7 +552,7 @@ install_single() {
             git clone --branch "$GIT_VERSION" "$FOODFLOW_REPO" "$DEPLOY_TARGET"
         elif [ -n "$GITHUB_TOKEN" ]; then
             log_info "使用 HTTPS + GITHUB_TOKEN 方式克隆..."
-            git clone --branch "$GIT_VERSION" "https://${GITHUB_TOKEN}@github.com/Tony855/shaolafang.git" "$DEPLOY_TARGET"
+            git clone --branch "$GIT_VERSION" "https://${GITHUB_TOKEN}@github.com/Tony855/foodflow.git" "$DEPLOY_TARGET"
             # 克隆完立刻剥离 token，防止写入 .git/config
             cd "$DEPLOY_TARGET"
             git remote set-url origin https://github.com/Tony855/foodflow.git
