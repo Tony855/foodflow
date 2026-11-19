@@ -20,6 +20,7 @@ concurrency:
 
 jobs:
   dependency-and-regression-audit:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     name: Dependencies and regression suite
     runs-on: ubuntu-latest
     timeout-minutes: 30
