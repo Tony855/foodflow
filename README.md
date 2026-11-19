@@ -2,7 +2,7 @@
 
 FoodFlow 是基于 Node.js、Express、MariaDB 和 Socket.IO 的餐饮运营系统，覆盖顾客扫码点餐、服务员桌台操作、后厨出餐、收银结算、商户运营管理及平台级管理。
 
-> 本仓库：`Tony855/shaolafang`  
+> 本仓库：`Tony855/foodflow`  
 > 默认分支：`main`  
 > 生产部署入口：Linux 一键安装向导 `install.sh`  
 > 详细部署手册：[`INSTALL.md`](./INSTALL.md)、[`DEPLOY-STANDARD.md`](./DEPLOY-STANDARD.md)、[`DEPLOY-ENTERPRISE.md`](./DEPLOY-ENTERPRISE.md)
@@ -251,8 +251,8 @@ sudo apt install -y git curl ca-certificates
 sudo mkdir -p /opt
 sudo chown "$USER":"$USER" /opt
 cd /opt
-git clone https://github.com/Tony855/shaolafang.git
-cd shaolafang
+git clone https://github.com/Tony855/foodflow.git
+cd foodflow
 ```
 
 ### 5.3 运行安装向导
@@ -336,7 +336,7 @@ FLUSH PRIVILEGES;
 ### 6.3 配置环境变量
 
 ```bash
-cd /opt/shaolafang
+cd /opt/foodflow
 cp .env.example .env
 nano .env
 ```
@@ -395,9 +395,9 @@ After=network-online.target mariadb.service
 Type=simple
 User=foodflow
 Group=www-data
-WorkingDirectory=/opt/shaolafang
-EnvironmentFile=/opt/shaolafang/.env
-ExecStart=/usr/bin/node /opt/shaolafang/server.js
+WorkingDirectory=/opt/foodflow
+EnvironmentFile=/opt/foodflow/.env
+ExecStart=/usr/bin/node /opt/foodflow/server.js
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
@@ -411,12 +411,12 @@ WantedBy=multi-user.target
 确保 `foodflow` 系统用户存在，并与安装脚本保持一致地使用 `www-data` 组。应用代码只读，上传、备份和日志目录由服务账号写入：
 
 ```bash
-sudo useradd --system --no-create-home --home-dir /opt/shaolafang --shell /usr/sbin/nologin --gid www-data foodflow 2>/dev/null || true
-sudo chown -R root:www-data /opt/shaolafang
-sudo install -d -o foodflow -g www-data -m 0770 /opt/shaolafang/uploads /opt/shaolafang/backups /opt/shaolafang/logs
+sudo useradd --system --no-create-home --home-dir /opt/foodflow --shell /usr/sbin/nologin --gid www-data foodflow 2>/dev/null || true
+sudo chown -R root:www-data /opt/foodflow
+sudo install -d -o foodflow -g www-data -m 0770 /opt/foodflow/uploads /opt/foodflow/backups /opt/foodflow/logs
 sudo install -d -o foodflow -g www-data -m 0700 /var/lib/foodflow
-sudo chown root:www-data /opt/shaolafang/.env
-sudo chmod 0640 /opt/shaolafang/.env
+sudo chown root:www-data /opt/foodflow/.env
+sudo chmod 0640 /opt/foodflow/.env
 ```
 
 数据库服务使用 `mariadb.service`。
@@ -757,7 +757,7 @@ sudo ss -lntp
 在已确认部署目录和 Git 工作区无本地未提交改动后：
 
 ```bash
-cd /opt/shaolafang
+cd /opt/foodflow
 sudo systemctl stop foodflow
 git status --short
 git fetch origin
@@ -970,7 +970,7 @@ npm run check:lang
 仓库提供 `uninstall.sh`。执行前请先阅读脚本内容，确认它将删除哪些服务、目录和配置，并自行备份数据库、上传文件、`.env` 和证书。
 
 ```bash
-cd /opt/shaolafang
+cd /opt/foodflow
 sudo bash uninstall.sh
 ```
 
@@ -990,9 +990,9 @@ sudo bash uninstall.sh
 | [财务流水基础](./docs/FINANCIAL-RECONCILIATION-FOUNDATION.md) | 对账导入的数据模型和安全边界 |
 | [财务匹配建议](./docs/FINANCIAL-RECONCILIATION-MATCH-SUGGESTIONS.md) | 精确匹配规则和建议状态 |
 
-- GitHub 仓库：[https://github.com/Tony855/shaolafang](https://github.com/Tony855/shaolafang)
-- Issues：[https://github.com/Tony855/shaolafang/issues](https://github.com/Tony855/shaolafang/issues)
-- Pull Requests：[https://github.com/Tony855/shaolafang/pulls](https://github.com/Tony855/shaolafang/pulls)
+- GitHub 仓库：[https://github.com/Tony855/foodflow](https://github.com/Tony855/foodflow)
+- Issues：[https://github.com/Tony855/foodflow/issues](https://github.com/Tony855/foodflow/issues)
+- Pull Requests：[https://github.com/Tony855/foodflow/pulls](https://github.com/Tony855/foodflow/pulls)
 
 ---
 

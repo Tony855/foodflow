@@ -39,7 +39,7 @@ if [ ! -f "$SCRIPT_DIR/scripts/lib/system-deps.sh" ] || [ ! -f "$SCRIPT_DIR/scri
     BOOTSTRAP_REPO="$BOOTSTRAP_DIR/repo"
     mkdir -p "$BOOTSTRAP_REPO"
 
-    BOOTSTRAP_URL="https://github.com/Tony855/shaolafang/archive/refs/heads/$BOOTSTRAP_VERSION.tar.gz"
+    BOOTSTRAP_URL="https://github.com/Tony855/foodflow/archive/refs/heads/$BOOTSTRAP_VERSION.tar.gz"
     if command -v curl >/dev/null 2>&1; then
         if ! curl --fail --location --silent --show-error --retry 3 --connect-timeout 15 \
             "$BOOTSTRAP_URL" --output "$BOOTSTRAP_ARCHIVE"; then
@@ -104,7 +104,7 @@ log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 log_success() { echo -e "${GREEN}${BOLD}[SUCCESS]${NC}${NC} $1"; }
 
 # 仓库为公开仓库，默认使用 HTTPS；绝不在代码中保存 SSH 私钥或 Token。
-FOODFLOW_REPO="https://github.com/Tony855/shaolafang.git"
+FOODFLOW_REPO="https://github.com/Tony855/foodflow.git"
 
 prepare_deploy_key() {
     # 仅在运维人员显式注入独立密钥文件时使用；公开仓库不需要部署密钥。
@@ -115,7 +115,7 @@ prepare_deploy_key() {
         log_error "FOODFLOW_DEPLOY_KEY 指定的密钥文件不可读"
         return 1
     fi
-    export FOODFLOW_REPO="git@github.com:Tony855/shaolafang.git"
+    export FOODFLOW_REPO="git@github.com:Tony855/foodflow.git"
     export GIT_SSH_COMMAND="ssh -i $FOODFLOW_DEPLOY_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
 }
 
@@ -518,7 +518,7 @@ install_single() {
         cd "$DEPLOY_TARGET"
         # 如果有 GITHUB_TOKEN，用带 token 的地址 pull
         if [ -n "$GITHUB_TOKEN" ]; then
-            git pull "https://${GITHUB_TOKEN}@github.com/Tony855/shaolafang.git" main || log_warn "git pull 失败，继续使用现有代码"
+            git pull "https://${GITHUB_TOKEN}@github.com/Tony855/foodflow.git" main || log_warn "git pull 失败，继续使用现有代码"
         else
             git pull origin main || log_warn "git pull 失败，继续使用现有代码"
         fi
@@ -552,14 +552,14 @@ install_single() {
             git clone --branch "$GIT_VERSION" "$FOODFLOW_REPO" "$DEPLOY_TARGET"
         elif [ -n "$GITHUB_TOKEN" ]; then
             log_info "使用 HTTPS + GITHUB_TOKEN 方式克隆..."
-            git clone --branch "$GIT_VERSION" "https://${GITHUB_TOKEN}@github.com/Tony855/shaolafang.git" "$DEPLOY_TARGET"
+            git clone --branch "$GIT_VERSION" "https://${GITHUB_TOKEN}@github.com/Tony855/foodflow.git" "$DEPLOY_TARGET"
             # 克隆完立刻剥离 token，防止写入 .git/config
             cd "$DEPLOY_TARGET"
-            git remote set-url origin https://github.com/Tony855/shaolafang.git
+            git remote set-url origin https://github.com/Tony855/foodflow.git
             git config --unset credential.helper 2>/dev/null || true
         else
             log_info "使用 HTTPS 方式克隆（需要输入用户名密码）..."
-            git clone --branch "$GIT_VERSION" https://github.com/Tony855/shaolafang.git "$DEPLOY_TARGET"
+            git clone --branch "$GIT_VERSION" https://github.com/Tony855/foodflow.git "$DEPLOY_TARGET"
         fi
         
         if [ $? -ne 0 ]; then

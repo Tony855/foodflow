@@ -1,6 +1,6 @@
 # 企业版与集群部署指南（当前仓库）
 
-> 本指南已按 Tony855/shaolafang 当前仓库结构重写。旧版内容包含不再随本仓库提供的 Kubernetes 清单、旧数据库变量和独立仓库克隆命令；不要再使用那些历史命令。
+> 本指南已按 Tony855/foodflow 当前仓库结构重写。旧版内容包含不再随本仓库提供的 Kubernetes 清单、旧数据库变量和独立仓库克隆命令；不要再使用那些历史命令。
 
 ## 选择部署拓扑
 
@@ -12,8 +12,8 @@
 ## 获取当前仓库
 
 ~~~bash
-git clone https://github.com/Tony855/shaolafang.git
-cd shaolafang
+git clone https://github.com/Tony855/foodflow.git
+cd foodflow
 ~~~
 
 安装器的集群入口：

@@ -303,7 +303,8 @@ test('enterprise deployment guides reference their own cluster scripts', () => {
 test('manual installation guides use the canonical repository and a non-root service account', () => {
   const install = read('INSTALL.md');
   const readme = read('README.md');
-  assert.ok(install.includes('https://github.com/Tony855/shaolafang.git'));
+  assert.ok(install.includes('https://github.com/Tony855/foodflow.git'));
+  assert.ok(!install.includes('Tony855/shaolafang.git'), 'installer must not pull from the former repository slug');
   assert.ok(install.includes('DB_USER=foodflow'));
   assert.ok(install.includes('DB_DATABASE=foodflow_system'));
   assert.ok(install.includes('User=foodflow\nGroup=www-data'));
@@ -321,16 +322,16 @@ test('top-level deployment guides and standard installer use the current reposit
   const standardGuide = read('deploy/standard/README.md');
   const deployGuide = read('deploy/README.md');
   const standardScript = read('deploy/standard/deploy.sh');
-  assert.ok(standard.includes('Tony855/shaolafang.git'));
+  assert.ok(standard.includes('Tony855/foodflow.git'));
   assert.ok(standard.includes('deploy/standard/README.md'));
   assert.doesNotMatch(standard, /foodflow-standard\.git|DB_USER=root/);
   assert.ok(enterprise.includes('deploy/enterprise/README.md'));
   assert.ok(enterprise.includes('deploy/enterprise-ultimate/README.md'));
   assert.doesNotMatch(enterprise, /foodflow-enterprise\.git|DB_USER=root|k8s\/redis-cluster\.yaml/);
-  assert.ok(standardGuide.includes('Tony855/shaolafang.git'));
+  assert.ok(standardGuide.includes('Tony855/foodflow.git'));
   assert.ok(standardGuide.includes('执行定时任务 | false'));
-  assert.ok(deployGuide.includes('Tony855/shaolafang.git'));
-  assert.ok(standardScript.includes('GIT_REPO="https://github.com/Tony855/shaolafang.git"'));
+  assert.ok(deployGuide.includes('Tony855/foodflow.git'));
+  assert.ok(standardScript.includes('GIT_REPO="https://github.com/Tony855/foodflow.git"'));
 });
 
 
