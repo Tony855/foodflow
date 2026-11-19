@@ -2,7 +2,7 @@
 
 > 审计日期：2026-11-19  
 > 仓库：`Tony855/foodflow`  
-> 基准 main：`331e30db62e1f2846813e2ad07c142024dcc22de`  
+> 原始审计基准：`331e30db62e1f2846813e2ad07c142024dcc22de`（历史基准；最新状态见第 9 节）  
 > 本文件区分“代码已实现”“自动化测试通过”和“真实生产验收”，不能仅凭代码或文档存在就判定功能已完成。
 
 ## 1. 本轮已合并的治理修复
@@ -14,7 +14,7 @@
 | #3 | `752cb0b71a44f7ccd6acb4ac9683fcce6fec90f8` | 安装器、升级脚本、部署文档统一使用 Tony855/foodflow |
 | #4 | `3eea5f62a3e6d222e7efc68b4870d37b8a4e9f46` | 每日完整审计、每日安装兼容矩阵、重复路由/函数审计、GitHub Actions Dependabot |
 | #6 | `81707ea6b9ccf763b7be32c725a936e6defbb095` | 新增当前功能与工程审计状态追踪文档 |
-| #7 | `331e30db62e1f2846813e2ad07c142024dcc22de` | Dependabot 将 GitHub Actions checkout 从 v6 更新至 v7，所有适用检查通过 |
+| #7 | `331e30db62e1f2846813e2ad07c142024dcc22de` | Dependabot 将 GitHub Actions checkout 从 v6 更新至 v7，所有适用检查通过 |\n| #8 | `5f58bdf45c7815966bbefa8aa84cb8fe622b99bb` | 更新审计状态文档基准 |\n| #9 | `e30879db26caadae6d19d46e1904c92a6278e122` | 刷新审计证据并将长期路线图标记为历史规划 |
 
 ## 2. 自动化审计机制
 
@@ -99,3 +99,23 @@
 - 仓库仍未启用 main branch protection，Rulesets 仍需管理员在 GitHub Settings 中手动配置；不能把 PR 流程等同于服务器端分支保护。
 - 历史路线图 `LONG_TERM_IMPROVEMENT_PLAN.md` 中描述的若干待办是早期规划，不应直接视为当前事实；应结合当前代码和本审计状态文档重新核对后再执行。
 
+
+
+## 9. PR #9 合并后的最新状态（2026-11-19）
+
+本节为当前最新状态，优先级高于第 1、3、6、8 节中较早的 main SHA、PR 数量和待办描述。
+
+- 最新 main：`e30879db26caadae6d19d46e1904c92a6278e122`（PR #9 squash merge）。
+- 已合并 PR：#2、#3、#4、#5、#6、#7、#8、#9；PR #9 已合并，无开放 PR（应以每次每日检查时 GitHub 实时结果为准）。
+- PR #9 head `0900e529807b4f839e9d71827188d1d57bef691d` 的适用检查全部通过：
+  - CI `44542782284`：validate、MySQL 8.4、MariaDB 10.11/11.4/11.8/12.3 全部 success。
+  - CodeQL `44542782346`：success；Dependencies and regression suite = skipped（PR/push 不运行该 job，只有 schedule / workflow_dispatch 运行）。
+  - Installer Compatibility `44542782312`：Debian 12/13、Ubuntu 22.04/24.04/26.04 全部 success。
+- PR #9 合并后 main push 触发的工作流：
+  - CI run `44543453401`。
+  - Daily Security and Quality Audit run `44543453475`；CodeQL 正在运行，完整依赖/回归 job 在 push 事件中按设计 skipped。
+  - 本节写入时，以上 post-merge main runs 尚未全部完成；不得把 PR head 检查等同于 main push 检查。
+- 每日完整依赖审计实际 job 只在 `schedule` / `workflow_dispatch` 运行，命令包括 `npm audit --audit-level=moderate`、Python 审计脚本编译、代码/重复路由审计、多语言严格检查和 `npm test`。PR/push 的 skipped 是预期条件，不是成功执行记录。
+- 每日安装兼容矩阵每天 08:00 柬埔寨时间执行；PR #9 head 的五种 Linux 环境均已成功。
+- 仓库 main branch protection / rulesets 尚未启用。管理员仍需手动设置要求 PR、required checks、禁止 force-push 和删除；在 GitHub 确认生效前，不得报告已启用。
+- `LONG_TERM_IMPROVEMENT_PLAN.md` 已加历史规划提示；当前实际功能状态以本文件的证据矩阵为准。
