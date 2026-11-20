@@ -190,7 +190,7 @@
 
 - 最新 main：`f3dce0696aa2b24d40965396e114ddc0bca63307`，由 PR #10 squash merge 产生；PR #10 合并提交：`f3dce0696aa2b24d40965396e114ddc0bca63307`。
 - 已合并 PR：#2、#3、#4、#5、#6、#7、#8、#9、#10。
-- 当前开放 PR：0；当前开放 issue：0。
+- PR #10 合并后、PR #11 创建前：开放 PR 0、开放 issue 0；本节审计文档当前通过 PR #11（`docs/audit-nov20-after-pr10`）提交，PR #11 仍待验证。
 - PR #10 head：`5828fd37e818d1cf40dcff8e466aaa9ed936d807`；变更仅涉及 `.github/workflows/daily-security-audit.yml` 与本审计文档，无业务/支付规则、数据库迁移或生产凭据变更。
 
 ### PR #10 head 的完整验证
