@@ -1,8 +1,8 @@
 # FoodFlow 功能与工程审计状态
 
-> 审计日期：2026-11-19  
+> 审计日期：2026-11-20  
 > 仓库：`Tony855/foodflow`  
-> 基准 main：`331e30db62e1f2846813e2ad07c142024dcc22de`  
+> 原始审计基准：`331e30db62e1f2846813e2ad07c142024dcc22de`（历史基准；最新状态见第 9 节）  
 > 本文件区分“代码已实现”“自动化测试通过”和“真实生产验收”，不能仅凭代码或文档存在就判定功能已完成。
 
 ## 1. 本轮已合并的治理修复
@@ -15,6 +15,8 @@
 | #4 | `3eea5f62a3e6d222e7efc68b4870d37b8a4e9f46` | 每日完整审计、每日安装兼容矩阵、重复路由/函数审计、GitHub Actions Dependabot |
 | #6 | `81707ea6b9ccf763b7be32c725a936e6defbb095` | 新增当前功能与工程审计状态追踪文档 |
 | #7 | `331e30db62e1f2846813e2ad07c142024dcc22de` | Dependabot 将 GitHub Actions checkout 从 v6 更新至 v7，所有适用检查通过 |
+| #8 | `5f58bdf45c7815966bbefa8aa84cb8fe622b99bb` | 更新审计状态文档基准 |
+| #9 | `e30879db26caadae6d19d46e1904c92a6278e122` | 刷新审计证据并将长期路线图标记为历史规划 |
 
 ## 2. 自动化审计机制
 
@@ -99,3 +101,82 @@
 - 仓库仍未启用 main branch protection，Rulesets 仍需管理员在 GitHub Settings 中手动配置；不能把 PR 流程等同于服务器端分支保护。
 - 历史路线图 `LONG_TERM_IMPROVEMENT_PLAN.md` 中描述的若干待办是早期规划，不应直接视为当前事实；应结合当前代码和本审计状态文档重新核对后再执行。
 
+
+
+## 9. PR #9 合并后的最新状态（2026-11-19）
+
+本节为当前最新状态，优先级高于第 1、3、6、8 节中较早的 main SHA、PR 数量和待办描述。
+
+- 最新 main：`e30879db26caadae6d19d46e1904c92a6278e122`（PR #9 squash merge）。
+- 已合并 PR：#2、#3、#4、#5、#6、#7、#8、#9；PR #9 已合并，无开放 PR（应以每次每日检查时 GitHub 实时结果为准）。
+- PR #9 head `0900e529807b4f839e9d71827188d1d57bef691d` 的适用检查全部通过：
+  - CI `44542782284`：validate、MySQL 8.4、MariaDB 10.11/11.4/11.8/12.3 全部 success。
+  - CodeQL `44542782346`：success；Dependencies and regression suite = skipped（PR/push 不运行该 job，只有 schedule / workflow_dispatch 运行）。
+  - Installer Compatibility `44542782312`：Debian 12/13、Ubuntu 22.04/24.04/26.04 全部 success。
+- PR #9 合并后 main push 触发的工作流：
+  - CI run `44543453401`。
+  - Daily Security and Quality Audit run `44543453475`；CodeQL 正在运行，完整依赖/回归 job 在 push 事件中按设计 skipped。
+  - 本节写入时，以上 post-merge main runs 尚未全部完成；不得把 PR head 检查等同于 main push 检查。
+- 每日完整依赖审计实际 job 只在 `schedule` / `workflow_dispatch` 运行，命令包括 `npm audit --audit-level=moderate`、Python 审计脚本编译、代码/重复路由审计、多语言严格检查和 `npm test`。PR/push 的 skipped 是预期条件，不是成功执行记录。
+- 每日安装兼容矩阵每天 08:00 柬埔寨时间执行；PR #9 head 的五种 Linux 环境均已成功。
+- 仓库 main branch protection / rulesets 尚未启用。管理员仍需手动设置要求 PR、required checks、禁止 force-push 和删除；在 GitHub 确认生效前，不得报告已启用。
+- `LONG_TERM_IMPROVEMENT_PLAN.md` 已加历史规划提示；当前实际功能状态以本文件的证据矩阵为准。
+
+
+## 10. 2026-11-20 每日复核
+
+本节为 2026-11-20 08:37（Asia/Phnom_Penh）的最新复核记录；旧章节中的 PR 数量、待办日期和运行状态均视为历史记录，以本节为准。
+
+### 仓库与变更状态
+
+- 最新 main：`e30879db26caadae6d19d46e1904c92a6278e122`，提交信息为 PR #9 的审计基准更新。
+- 已合并 PR：#2、#3、#4、#5、#6、#7、#8、#9。
+- 当前开放 PR：#10（`docs/update-audit-after-pr9`），base 为 main，检查时 head 为 `956c1283915aff08a0c0fd60b3ccbe200a9c9bbd`；mergeable=true，无 review submissions、无 inline review threads。
+- 当前开放 issue：0。
+- PR #10 仅修改本审计文档。复核发现合并记录表中 #7/#8/#9 行被写入字面量 `\n`，导致 Markdown 表格断行错误；本次已修正为真实换行。此修正会产生新的 PR head，旧 head 的检查结果不得用于新 head 的合并判定。
+
+### main 合并后验证证据
+
+- CI run [44543453401](https://github.com/Tony855/foodflow/actions/runs/44543453401)：validate、MySQL 8.4、MariaDB 10.11、11.4、11.8、12.3 全部 success。
+- Daily Security and Quality Audit run [44543453475](https://github.com/Tony855/foodflow/actions/runs/44543453475)：CodeQL static security analysis = success；Dependencies and regression suite = skipped（push 事件按 workflow 条件跳过，不代表执行通过）。
+- Installer Compatibility run [44543453444](https://github.com/Tony855/foodflow/actions/runs/44543453444)：Debian 12、Debian 13、Ubuntu 22.04、24.04、26.04 全部 success。
+- 因此，main SHA `e30879db26caadae6d19d46e1904c92a6278e122` 的合并后 CI、数据库矩阵、CodeQL 作业和安装矩阵均已完成并成功；但上述 push 触发的完整依赖/回归 job 被跳过。
+
+### PR #10 原 head 检查证据（修正文档前）
+
+- CI run [44543671786](https://github.com/Tony855/foodflow/actions/runs/44543671786)：validate、MySQL 8.4、MariaDB 10.11/11.4/11.8/12.3 全部 success。
+- CodeQL run [44543671719](https://github.com/Tony855/foodflow/actions/runs/44543671719)：CodeQL success；Dependencies and regression suite skipped（PR 事件按条件跳过）。
+- Installer run [44543671724](https://github.com/Tony855/foodflow/actions/runs/44543671724)：五种 Debian/Ubuntu 环境全部 success。
+- 以上仅属于旧 head `956c1283915aff08a0c0fd60b3ccbe200a9c9bbd`。修正提交后必须重新检查新 head 的所有适用工作流；当前不合并 PR #10。
+
+### 每日依赖审计与漏洞状态
+
+- 截至本次检查时间 08:37，Actions 最近运行列表中尚未出现 2026-11-20 的 schedule 事件。今日完整 `npm audit --audit-level=moderate`、静态审计、多语言严格检查和完整 `npm test` 尚无新的运行证据；不能用 push/PR 中被 skipped 的 job 替代。
+- 已知的 `npm audit` 0 vulnerabilities 证据属于 2026-11-19 的历史审计基线，不代表本日重新扫描。
+- main 的 CodeQL 作业成功，但本轮未能取得 Dependabot / code-scanning alerts 的实时告警清单；不得据此宣称当前告警数为零。
+- Dependabot 的 npm 与 GitHub Actions 周更配置仍在；最近可见的自动升级 PR 均已完成，但这不等同于实时漏洞告警清单。
+- 本次 PR 同时将 `daily-security-audit.yml` 的完整依赖/回归 job 条件扩展为 `schedule` / `workflow_dispatch` / `pull_request`，确保每个 PR head 运行全量 `npm audit --audit-level=moderate`、静态审计、严格 i18n 与完整 `npm test`；新 head 的该 job 结果必须重新核验。
+
+### 分支治理状态
+
+- main 分支 API 当前返回 `protected=false`，branch protection 显示 disabled；仓库 rulesets 列表为空。
+- **高优先级治理风险：main 未启用服务器端分支保护。** 必须由仓库管理员配置要求 PR、required status checks（validate、MySQL/MariaDB 数据库矩阵、CodeQL、Debian/Ubuntu 安装矩阵）、禁止 force-push 和删除。不能把现有 PR 协作流程当作分支保护已经生效。
+
+### 功能与安全状态
+
+- 顾客扫码点餐、服务员桌台、KDS、收银/退款、商户与门店管理、财务对账/月结：核心代码与自动化测试已有历史证据；真实设备、门店、财务签字和跨租户生产攻击验收仍未完成。
+- ABA PayWay / Bakong / KHQR：存在 adapter、查询/验证 helper 和测试；生产 callback ingress、verified-event processor、订单自动结算、退款回调与总账自动过账闭环仍未完成，必须等待官方协议、sandbox 凭据和财务映射确认。
+- Telegram：outbox/webhook 代码已交付，worker 默认关闭；需要真实 Bot、Webhook、多商户 staging 与失败恢复 E2E。
+- 数据库迁移与备份恢复：MySQL/MariaDB 自动化集成矩阵历史通过；没有生产备份恢复演练、RPO/RTO 签收，也不得在没有环境验收时执行破坏性迁移。
+- 多节点 Redis/Socket.IO：有实现与配置，缺真实多节点和故障注入验收。
+- 浏览器 E2E 与覆盖率门槛：尚无完整用户旅程 E2E / coverage gate 证据。
+- 静态审计警告的最近已知基线仍为 157 个疑似未用 i18n key、90 个疑似未用 CSS class、6 个疑似未用 window export；174 个动态拼接候选被标记为误报。由于本日完整 schedule 审计尚无运行结果，这些数字不是本日重新计算结果，禁止据此批量删除。
+
+### 下一批优先事项
+
+1. 复核今日 schedule 是否启动；取得运行后检查 npm audit、静态审计、严格 i18n 与完整 Node 测试的逐项结果。
+2. 修正 PR #10 的 Markdown 表格换行后，等待新 head 的 CI、CodeQL、数据库矩阵和安装矩阵全部完成，再决定是否 squash merge。
+3. 管理员启用 main branch protection / rulesets，并设置全部 required checks。
+4. 增加浏览器端顾客下单→KDS→收银→退款和跨商户隔离 E2E。
+5. 继续推进 ABA/Bakong callback 与 KHQR 支付状态、退款、总账的 sandbox 闭环；没有凭据和财务审批时不得合并业务规则变更。
+6. 完成 Telegram staging、生产备份恢复演练、RPO/RTO 和多节点故障注入验收。
