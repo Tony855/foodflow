@@ -155,6 +155,7 @@
 - 已知的 `npm audit` 0 vulnerabilities 证据属于 2026-11-19 的历史审计基线，不代表本日重新扫描。
 - main 的 CodeQL 作业成功，但本轮未能取得 Dependabot / code-scanning alerts 的实时告警清单；不得据此宣称当前告警数为零。
 - Dependabot 的 npm 与 GitHub Actions 周更配置仍在；最近可见的自动升级 PR 均已完成，但这不等同于实时漏洞告警清单。
+- 本次 PR 同时将 `daily-security-audit.yml` 的完整依赖/回归 job 条件扩展为 `schedule` / `workflow_dispatch` / `pull_request`，确保每个 PR head 运行全量 `npm audit --audit-level=moderate`、静态审计、严格 i18n 与完整 `npm test`；新 head 的该 job 结果必须重新核验。
 
 ### 分支治理状态
 
