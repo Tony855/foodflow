@@ -15,7 +15,8 @@
 | #4 | `3eea5f62a3e6d222e7efc68b4870d37b8a4e9f46` | 每日完整审计、每日安装兼容矩阵、重复路由/函数审计、GitHub Actions Dependabot |
 | #6 | `81707ea6b9ccf763b7be32c725a936e6defbb095` | 新增当前功能与工程审计状态追踪文档 |
 | #7 | `331e30db62e1f2846813e2ad07c142024dcc22de` | Dependabot 将 GitHub Actions checkout 从 v6 更新至 v7，所有适用检查通过 |
-| #8 | `5f58bdf45c7815966bbefa8aa84cb8fe622b99bb` | 更新审计状态文档基准 |\n| #9 | `e30879db26caadae6d19d46e1904c92a6278e122` | 刷新审计证据并将长期路线图标记为历史规划 |
+| #8 | `5f58bdf45c7815966bbefa8aa84cb8fe622b99bb` | 更新审计状态文档基准 |
+| #9 | `e30879db26caadae6d19d46e1904c92a6278e122` | 刷新审计证据并将长期路线图标记为历史规划 |
 
 ## 2. 自动化审计机制
 
