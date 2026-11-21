@@ -257,8 +257,8 @@
 ### PR #11 合并后 main 检查
 
 - GitHub API 确认 main 指向 `b7fa1228dee85ce17db1897eca81822b20bcea86`，PR #11 已合并。
-- 当前连接无法读取合并后 main 的 Actions run 列表/check suites；post-merge CI、CodeQL 和安装矩阵的运行结果尚未独立核验。PR #11 head 的成功结果不能替代 post-merge main 验证。
-- 当日 main schedule run 也尚未获得独立 run 记录；不以 PR head 的审计代替 schedule 事件。
+- follow-up API 复核取得 post-merge run：CI [44853077364](https://github.com/Tony855/foodflow/actions/runs/44853077364) 仍运行中，validate、MySQL 8.4、MariaDB 11.4/11.8 success，MariaDB 10.11/12.3 pending；Installer Compatibility [44853077336](https://github.com/Tony855/foodflow/actions/runs/44853077336) 五个 Debian/Ubuntu job 全部 success；Daily Security and Quality Audit [44853077274](https://github.com/Tony855/foodflow/actions/runs/44853077274) CodeQL success，Dependencies and regression suite = skipped（push 事件按条件跳过）。
+- PR #11 head 的完整依赖/回归与测试通过可作为该文档变更的验证证据，但不能替代 post-merge main 的完整验证。今日 schedule run 尚未取得独立记录；上一份 schedule 成功运行属于 2026-11-20 的旧 main SHA `f3dce...`，不作为本日证据。
 
 ### 安全与治理
 
