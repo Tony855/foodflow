@@ -180,3 +180,54 @@
 4. 增加浏览器端顾客下单→KDS→收银→退款和跨商户隔离 E2E。
 5. 继续推进 ABA/Bakong callback 与 KHQR 支付状态、退款、总账的 sandbox 闭环；没有凭据和财务审批时不得合并业务规则变更。
 6. 完成 Telegram staging、生产备份恢复演练、RPO/RTO 和多节点故障注入验收。
+
+
+## 11. PR #10 合并与 2026-11-20 最终复核
+
+本节为本日最新状态，覆盖第 10 节中 PR #10 尚未合并时的快照。
+
+### 主分支与 PR 状态
+
+- 最新 main：`f3dce0696aa2b24d40965396e114ddc0bca63307`，由 PR #10 squash merge 产生；PR #10 合并提交：`f3dce0696aa2b24d40965396e114ddc0bca63307`。
+- 已合并 PR：#2、#3、#4、#5、#6、#7、#8、#9、#10。
+- PR #10 合并后、PR #11 创建前：开放 PR 0、开放 issue 0；本节审计文档当前通过 PR #11（`docs/audit-nov20-after-pr10`）提交，PR #11 仍待验证。
+- PR #10 head：`5828fd37e818d1cf40dcff8e466aaa9ed936d807`；变更仅涉及 `.github/workflows/daily-security-audit.yml` 与本审计文档，无业务/支付规则、数据库迁移或生产凭据变更。
+
+### PR #10 head 的完整验证
+
+- CI run [44655378276](https://github.com/Tony855/foodflow/actions/runs/44655378276)：validate、MySQL 8.4、MariaDB 10.11、11.4、11.8、12.3 全部 success。
+- Daily Security and Quality Audit run [44655377896](https://github.com/Tony855/foodflow/actions/runs/44655377896)：Dependencies and regression suite = success；CodeQL static security analysis = success。
+- Installer Compatibility run [44655378107](https://github.com/Tony855/foodflow/actions/runs/44655378107)：Debian 12、Debian 13、Ubuntu 22.04、24.04、26.04 全部 success。
+- 全量 `npm audit --audit-level=moderate`：`found 0 vulnerabilities`。
+- 完整 Node 测试：805 项，779 pass、0 fail、26 skipped；26 项因通用 job 未设置 `MYSQL_INTEGRATION_URL` 而跳过，MySQL 8.4 与 MariaDB 10.11/11.4/11.8/12.3 的独立数据库集成作业均成功。
+- 静态审计：306 个 JS 文件语法通过；8 个页面 inline handler 与 DOM ID 对账通过；23 个 route files 全部注册；48 services、7 middleware、3 db、7 config 均被引用；102 个前端 API 调用均能找到后端定义（识别到 170 个后端定义）；206 个接口未发现同 method/path 重复。
+- 静态候选警告：157 个疑似未使用 i18n key、90 个疑似未使用 CSS class、6 个疑似未使用 window export；174 个动态拼接候选为已知误报。不得在未逐项确认动态引用前删除。CodeQL 作业成功不等于告警数量为零；本轮未取得独立的 Dependabot/code-scanning alerts 清单。
+
+### PR #10 合并后的 main 验证
+
+- CI run [44655672200](https://github.com/Tony855/foodflow/actions/runs/44655672200)：validate、MySQL 8.4、MariaDB 10.11/11.4/11.8/12.3 全部 success。
+- Daily Security and Quality Audit run [44655672860](https://github.com/Tony855/foodflow/actions/runs/44655672860)：CodeQL success；Dependencies and regression suite skipped（push 事件按条件跳过；PR #10 head 的完整 job 已成功执行）。
+- Installer Compatibility run [44655672068](https://github.com/Tony855/foodflow/actions/runs/44655672068)：Debian 12/13、Ubuntu 22.04/24.04/26.04 全部 success。
+- 因此 main `f3dce0696aa2b24d40965396e114ddc0bca63307` 的合并后 CI、数据库矩阵、CodeQL 作业与安装矩阵均已完成并通过。
+
+### 每日 schedule 与分支治理
+
+- 截至 2026-11-20 08:47（柬埔寨时间），main 的 Actions 最近运行列表仍未出现今日 `schedule` 事件；本日全量依赖/回归审计已通过 PR #10 head 的 run `44655377896` 完成，但不能将其冒充为 main 上的 schedule run。
+- PR #10 已把完整依赖/回归 job 扩展为在 `schedule`、`workflow_dispatch` 和 `pull_request` 事件运行，避免后续 PR 的全量审计被跳过。
+- main 当前 `protected=false`、branch protection disabled、rulesets 列表为空。**高优先级治理风险仍未解除**：管理员必须启用要求 PR、required status checks、禁止 force-push 和删除；在服务器端规则生效前不得声称 main 已受保护。
+
+### 功能验收状态与阻塞
+
+- 已实现且有自动化测试证据：顾客扫码点餐、服务员桌台、KDS、收银基础流程、租户/角色核心授权、财务对账与月结核心、备份/恢复集成测试、KHQR 状态与并发保护测试。
+- 部分实现：ABA PayWay / Bakong adapters 与查询/验证 helper；财务 provider-neutral ledger/reconciliation；Telegram outbox/webhook；Redis/Socket.IO 多节点配置。
+- 未实现/未闭环：生产可用支付 callback ingress 与 verified-event processor、自动订单结算与总账自动过账、完整自动退款回调、浏览器端完整 E2E/覆盖率门槛。
+- 生产验收阻塞：支付方 sandbox/商户凭据与官方合同、财务账户映射和签字；真实 Telegram Bot/Webhook staging；生产备份恢复与 RPO/RTO 演练；多节点故障注入；真实门店设备/打印机/浏览器验收。
+- 不报告虚构完成百分比；生产凭据、真实支付方、客户数据与生产数据库均未在本轮访问。
+
+### 下一批优先事项
+
+1. 管理员启用 main branch protection / rulesets 并配置全部 required checks。
+2. 继续补充浏览器 E2E：顾客下单→KDS→收银→退款，并增加跨商户对象授权攻击测试。
+3. 在 sandbox 与财务审批后实现 ABA/Bakong callback、verified-event processor、订单状态与总账/退款闭环。
+4. 完成 Telegram 多商户 staging、备份恢复演练、RPO/RTO 与 Redis 多节点故障注入。
+5. 逐项人工分类静态死代码候选；禁止按静态启发式结果直接批量删除。
