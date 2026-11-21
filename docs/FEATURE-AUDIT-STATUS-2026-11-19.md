@@ -231,3 +231,55 @@
 3. 在 sandbox 与财务审批后实现 ABA/Bakong callback、verified-event processor、订单状态与总账/退款闭环。
 4. 完成 Telegram 多商户 staging、备份恢复演练、RPO/RTO 与 Redis 多节点故障注入。
 5. 逐项人工分类静态死代码候选；禁止按静态启发式结果直接批量删除。
+
+
+## 12. 2026-11-21 每日复核
+
+本节为 2026-11-21（Asia/Phnom_Penh）复核；旧章节中的开放 PR 数量与运行状态仅作为历史记录。
+
+### 仓库状态与合并记录
+
+- main 最新 SHA：`b7fa1228dee85ce17db1897eca81822b20bcea86`，由 PR #11 squash merge 产生。
+- 已合并 PR：#2、#3、#4、#5、#6、#7、#8、#9、#10、#11（共 10 个已记录合并 PR）。
+- 当前开放 PR：0；当前开放 issue：0（GitHub 搜索实时结果）。
+- PR #11：`docs/audit-nov20-after-pr10`，head `52232557ec95618a05dbd53c4a66f9e668bdaca5`，已于 2026-11-21 squash merge，合并 commit `b7fa1228dee85ce17db1897eca81822b20bcea86`。仅更新审计文档，无业务/支付规则、数据库迁移或生产凭据变更。
+
+### PR #11 head 的适用验证
+
+- CI run [44656018085](https://github.com/Tony855/foodflow/actions/runs/44656018085)：validate、MySQL 8.4、MariaDB 10.11、11.4、11.8、12.3 全部 success。
+- Daily Security and Quality Audit run [44656018044](https://github.com/Tony855/foodflow/actions/runs/44656018044)：CodeQL success；完整 Dependencies and regression suite success。
+- Installer Compatibility run [44656018047](https://github.com/Tony855/foodflow/actions/runs/44656018047)：Debian 12/13、Ubuntu 22.04/24.04/26.04 全部 success。
+- 完整依赖审计：`npm audit --audit-level=moderate` 输出 `found 0 vulnerabilities`。
+- Node 回归：805 tests，779 pass、0 fail、26 skipped；26 项是通用测试任务未设置 `MYSQL_INTEGRATION_URL` 的独立集成测试，数据库矩阵单独执行成功。
+- 静态审计、严格 i18n 和审计脚本编译步骤全部成功。历史静态候选警告仍需人工分类；未逐项验证前禁止批量删除。
+- Codex PR review 任务曾因使用额度限制而失败；该失败关联旧 commit `9c3463a...`，没有形成 inline review thread 或正式 review submission。不能将它称为通过的 review；但 PR #11 最新 head 的所有 GitHub Actions 适用检查均成功。
+
+### PR #11 合并后 main 检查
+
+- GitHub API 确认 main 指向 `b7fa1228dee85ce17db1897eca81822b20bcea86`，PR #11 已合并。
+- 当前连接无法读取合并后 main 的 Actions run 列表/check suites；post-merge CI、CodeQL 和安装矩阵的运行结果尚未独立核验。PR #11 head 的成功结果不能替代 post-merge main 验证。
+- 当日 main schedule run 也尚未获得独立 run 记录；不以 PR head 的审计代替 schedule 事件。
+
+### 安全与治理
+
+- main branch protection：`protected=false`、protection disabled、required status checks enforcement off。
+- Rulesets：API 返回空列表。
+- **高优先级治理风险仍存在**：必须由管理员启用 PR、required checks、禁止 force-push 和删除；当前连接无权修改这些管理设置。
+- npm audit 最新证据为 PR #11 head（合并前）0 vulnerabilities；本轮未取得独立实时 Dependabot/code-scanning alerts 列表，不能宣称所有安全告警为零。
+
+### 功能与验收状态
+
+- 已实现且有自动化测试证据：扫码点餐、桌台/服务员、KDS、收银基础流程、租户与角色核心授权、财务对账/月结核心、备份恢复集成测试等。
+- 部分实现：ABA PayWay/Bakong adapters 和验证查询 helper、provider-neutral 财务核心、Telegram outbox/webhook、多节点配置。
+- 未闭环：生产支付 callback ingress 与 verified-event processor、自动订单结算/总账过账、完整自动退款 callback、浏览器完整 E2E 与覆盖率门槛。
+- 生产验收阻塞：支付方 sandbox/商户凭据与官方协议、财务账户映射及签字、真实 Telegram Bot/webhook staging、生产恢复演练与 RPO/RTO、多节点故障注入、门店设备/打印机验收。
+- 未访问生产数据库、支付凭据、客户数据或真实生产环境；未执行生产迁移/支付/退款。
+
+### 下一批优先事项
+
+1. 继续验证 main post-merge Actions 与每日 schedule；需获得完整 run/check 数据后才能确认。
+2. 管理员启用 main protection / rulesets 与 required checks。
+3. 增加顾客下单→KDS→收银→退款的浏览器 E2E，并补跨租户攻击验证。
+4. 在 sandbox 和财务审批后闭环 ABA/Bakong callback、KHQR、退款和总账。
+5. 完成 Telegram staging、生产备份恢复、RPO/RTO 和多节点故障注入。
+6. 分类静态死代码候选，禁止凭启发式结果批量删除。
