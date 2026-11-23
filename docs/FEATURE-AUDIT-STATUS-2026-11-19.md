@@ -352,3 +352,63 @@
 5. 在支付方 sandbox 与财务审批后闭环 ABA/Bakong callback、KHQR、退款和总账；无凭据/审批时不得修改业务规则。
 6. 完成 Telegram 多商户 staging、生产备份恢复演练、RPO/RTO 与 Redis 多节点故障注入。
 7. 人工分类静态候选警告；不得按启发式结果批量删除。
+
+
+## 14. 2026-11-23 每日复核
+
+本节记录 2026-11-23 08:05（Asia/Phnom_Penh）复核。由于当前 GitHub 集成无法列出所有 Actions runs 或直接读取 branch protection/rulesets 管理接口，本节对这两类项目明确区分最新已核实证据与今日未能重新读取的状态，不把历史数据冒充今日实时结果。
+
+### 仓库、PR、Issue 与 main
+
+- 最新已确认 main SHA：`5d3060b45f9ff7f8f4f26806bafd494432a8103f`（PR #13 squash merge）。
+- 最近提交搜索结果仍指向该 main commit；本次未发现更晚提交。
+- 当前开放 PR：0（GitHub PR 查询）。
+- 当前开放 Issue：0（GitHub Issue 搜索）。
+- 已记录合并 PR：#2–#13，共 12 个（含 PR #12、#13）。
+- PR #13 合并后 main 的 post-merge CI、CodeQL 和安装矩阵已完成，结果见下节。
+
+### main post-merge 验证
+
+- CI run [44973055785](https://github.com/Tony855/foodflow/actions/runs/44973055785)：validate、MySQL 8.4、MariaDB 10.11、11.4、11.8、12.3 全部 success。工作任务日志确认 finance integration、migration、backup/restore 和 Telegram outbox integration 子任务执行成功。
+- Daily Security and Quality Audit run [44973055766](https://github.com/Tony855/foodflow/actions/runs/44973055766)：CodeQL static security analysis success；Dependencies and regression suite = skipped（push 事件按 workflow 条件跳过，不能计为执行通过）。
+- Installer Compatibility run [44973055751](https://github.com/Tony855/foodflow/actions/runs/44973055751)：Debian 12/13、Ubuntu 22.04/24.04/26.04 全部 success。
+- 因此 main SHA `5d3060b...` 的 post-merge CI/数据库矩阵、CodeQL job 和安装兼容矩阵已完成并成功；完整依赖/回归任务没有在该 push run 上执行。
+- 该 main commit 对应 PR #13 的合并内容。PR #13 head 上已执行完整 Dependencies and regression suite、CodeQL、CI/数据库矩阵和安装矩阵并全部成功；该 head 的全量 npm audit 输出 0 vulnerabilities。此 PR-head 证据不能冒充 main schedule run。
+
+### 依赖、测试和安全证据
+
+- PR #13 head 的 `npm audit --audit-level=moderate`：0 vulnerabilities；生产依赖审计 `npm audit --omit=dev --audit-level=high`：0 vulnerabilities。
+- Node suite：805 tests，779 pass、0 fail、26 skipped；26 项为通用测试任务未配置 `MYSQL_INTEGRATION_URL` 的独立数据库测试。
+- MySQL/MariaDB 集成测试单独运行。可核实的 MariaDB 10.11 日志显示 finance integration 23 tests、23 pass、0 fail、0 skipped；session migration、backup/restore 和 Telegram outbox integration 子任务各自通过。
+- CodeQL job success 不等于 GitHub 所有安全告警为零。当前集成仍未取得独立 Dependabot / code-scanning alerts 的实时列表，告警清单状态未知。
+- 本次未访问生产数据库、客户数据、支付凭据或真实生产环境；未执行生产支付、退款或数据库迁移。
+
+### 每日 schedule 状态
+
+- `daily-security-audit.yml` 与 `installer-compat.yml` 配置 `cron: "0 1 * * *"`（UTC 01:00，即柬埔寨时间 08:00）。
+- 当前运行时为 08:05，GitHub Actions runs 列表端点不可由当前连接读取；本次未能确认 2026-11-23 schedule 是否已启动/完成，也未能独立确认 2026-11-22 schedule run。
+- 最新可核实的 schedule 记录仍是前述历史 run（2026-11-21）。不能用 PR/push run 代替每日 schedule run。
+- 过去记录中的 schedule 时间戳与预期 UTC 时间有偏差，需要继续观察；目前不擅自修改 cron，待取得完整 run list 后再判断是否漏触发或延迟。
+
+### 静态审计与功能验收
+
+- 最近可核实静态候选基线：157 个疑似未使用 i18n key、90 个疑似未使用 CSS class、6 个疑似未使用 window export、174 个动态拼接候选（已识别为误报）。本日 schedule 未能独立确认，因此不声称这些数字今日重新计算。
+- 已实现且有自动化测试证据：顾客扫码点餐、桌台/服务员、KDS、收银基础流程、租户/角色核心授权、财务对账/月结核心、备份恢复集成测试。
+- 部分实现：ABA PayWay/Bakong adapters 与查询/验证 helper、provider-neutral 财务核心、Telegram outbox/webhook、多节点 Redis/Socket.IO 配置。
+- 未闭环：生产支付 callback ingress 与 verified-event processor、自动订单结算/总账过账、完整自动退款 callback、浏览器完整 E2E 与 coverage gate。
+- 生产验收阻塞：支付方 sandbox/商户凭据与官方协议、财务账户映射和签字、真实 Telegram staging、生产备份恢复/RPO/RTO、Redis/Socket.IO 多节点故障注入、真实门店设备/打印机验收。
+
+### main branch protection / rulesets
+
+- 最新可核实管理状态来自 2026-11-22 的读取：`protected=false`、branch protection disabled、required status enforcement off、rulesets 列表为空。
+- 本日无法通过当前 GitHub 集成重新读取这些管理端点；不得把 2026-11-22 的读数冒充 2026-11-23 的实时确认。
+- **高优先级治理风险仍未解除（最新已核实状态为未启用）**。管理员必须在 Settings → Rules → Rulesets 对 main 启用 PR、required checks（validate、MySQL 8.4、MariaDB 10.11/11.4/11.8/12.3、CodeQL、Debian 12/13、Ubuntu 22.04/24.04/26.04）、禁止 force-push 和删除，并在生效后重新验证。
+
+### 下一批优先事项
+
+1. 取得 main SHA `5d3060b...` 的每日 schedule runs/checks 列表，核实 2026-11-23 完整依赖审计、静态审计、i18n 与测试结果；若未触发，分析时间偏差后通过 PR 调整。
+2. 管理员启用 main branch protection / rulesets 和全部 required checks。
+3. 增加浏览器 E2E（顾客下单 → KDS → 收银 → 退款）与跨租户对象授权攻击测试。
+4. 在 sandbox 与财务审批后推进 ABA/Bakong callback、KHQR、退款及总账闭环。
+5. 完成 Telegram 多商户 staging、生产备份恢复演练/RPO/RTO 与多节点故障注入。
+6. 对静态候选逐项分类；不得仅凭启发式结果批量删除。
