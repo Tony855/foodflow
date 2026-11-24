@@ -472,7 +472,7 @@
 6. 完成 Telegram staging、生产备份恢复演练、RPO/RTO、多节点故障注入，并人工分类静态候选警告。
 
 
-### 15.1 PR #14 合并后 main checks 最终结果（2026-11-24 08:45，Asia/Phnom_Penh）
+### 15.1 PR #14 合并后 main checks 最终结果（2026-11-24 08:38，Asia/Phnom_Penh）
 
 - main SHA `8c4f44b0845f515c4b1a4cc5ab537c1c197bec38` 的 CI run [45306254757](https://github.com/Tony855/foodflow/actions/runs/45306254757) 最终全部 success：validate、MySQL 8.4、MariaDB 10.11、11.4、11.8、12.3。
 - Daily Security and Quality Audit push run [45306254883](https://github.com/Tony855/foodflow/actions/runs/45306254883)：CodeQL success；Dependencies and regression suite = skipped（push event 条件）。此 SHA 的代码与 PR #14 仅文档更新；完整依赖/回归任务已在 2026-11-23 schedule run [45141719537](https://github.com/Tony855/foodflow/actions/runs/45141719537) 上成功执行。
