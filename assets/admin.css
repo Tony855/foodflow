@@ -414,38 +414,7 @@
             grid-column: 1/-1;
         }
 
-        .admin-form {
-            display: grid;
-            gap: 10px;
-            margin-bottom: 14px;
-            padding: 12px;
-            background: rgba(255, 255, 255, .04);
-            border: 1px solid #3c3c58;
-            border-radius: 14px;
-        }
-        .admin-form input,
-        .admin-form select {
-            width: 100%;
-            height: 40px;
-            padding: 0 12px;
-            font-size: 14px;
-            border-radius: 10px;
-            border: 1px solid #4d4d70;
-            background: #22223a;
-            color: #fff;
-        }
-        .admin-form button {
-            height: 40px;
-            padding: 0 14px;
-            border-radius: 10px;
-            border: 0;
-            cursor: pointer;
-            font-weight: 700;
-            background: linear-gradient(135deg, #f76b46, #df4d32);
-            color: #fff;
-        }
 
-        
         /* 双货币显示设置栏 */
         .display-settings-btn {
             background: linear-gradient(135deg, #e85d3a, #e84a2a);
@@ -2417,8 +2386,6 @@ button.edit-btn:disabled {
     .tab-btn { background: transparent; color: rgba(255,255,255,.6); border: 0; padding: 10px 28px; border-radius: 9px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all .3s cubic-bezier(.4,0,.2,1); display: flex; align-items: center; gap: 7px; letter-spacing: .3px; }
     .tab-btn:hover { color: rgba(255,255,255,.9); }
     .tab-btn.active { background: linear-gradient(135deg,#e85d3a 0%,#f0823a 100%); color: #fff; box-shadow: 0 3px 12px rgba(232,93,58,.45), inset 0 1px 0 rgba(255,255,255,.2); }
-    .tab-btn.active .tab-icon { transform: scale(1.1); }
-    .tab-icon { transition: transform .3s ease; }
     .tab-divider { width: 1px; background: rgba(255,255,255,.15); margin: 6px 4px; }
     .tab-btn.tab-action { color: rgba(255,255,255,.75); }
     .tab-btn.tab-action:hover { background: rgba(255,255,255,.1); color: #fff; }
