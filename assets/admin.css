@@ -2135,10 +2135,6 @@ button.edit-btn:disabled {
             .form button.full {
                 grid-column: 1;
             }
-            .admin-form {
-                grid-template-columns: 1fr !important;
-            }
-
             .order-summary {
                 grid-template-columns: 1fr 1fr;
                 gap: 8px;
