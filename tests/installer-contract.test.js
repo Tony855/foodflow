@@ -460,7 +460,7 @@ test('enterprise cluster installers clone the canonical FoodFlow repository, not
   ]) {
     const source = read(file);
     assert.ok(source.includes('https://github.com/Tony855/foodflow.git'), file + ' must use canonical source');
-    assert.ok(source.includes('https://github.com/Tony855/foodflow'), file + ' must validate canonical origin before updating');
+    assert.ok(source.includes('https://github.com/Tony855/foodflow.git'), file + ' must validate the exact canonical origin before updating');
     assert.ok(source.includes('ff_require_clean_git_worktree'), file + ' must reject dirty worktrees');
     assert.doesNotMatch(source, /foodflow-enterprise(?:-ultimate)?\.git/, file + ' must not use a legacy repository');
   }
@@ -480,7 +480,7 @@ test('all installer source and bootstrap paths resolve to the canonical FoodFlow
   assert.ok(!install.includes('git pull origin main || log_warn'), 'installer must fail closed when updating an existing checkout');
   assert.ok(remoteUpdate.includes('git fetch --no-tags origin "$GIT_VERSION"'));
   assert.match(remoteUpdate, /git remote get-url origin/);
-  assert.match(remoteUpdate, /https:\/\/github\.com\/Tony855\/foodflow/);
+  assert.ok(remoteUpdate.includes('https://github.com/Tony855/foodflow.git'), 'remote updater must validate the exact canonical origin');
   assert.match(remoteUpdate, /canonical FoodFlow 仓库，拒绝更新/);
   assert.ok(remoteUpdate.indexOf('git remote get-url origin') < remoteUpdate.indexOf('git fetch --no-tags origin'));
   const safety = read('scripts/lib/deploy-safety.sh');
@@ -498,7 +498,7 @@ test('all installer source and bootstrap paths resolve to the canonical FoodFlow
     'deploy/enterprise-ultimate/cluster/deploy.sh'
   ]) {
     const source = read(file);
-    assert.doesNotMatch(source, /github\.com\/Tony855\/foodflow-(?:standard|enterprise(?:-ultimate)?)\.git/, file + ' must not fetch from a legacy repository');
+    assert.ok(!['https://github.com/Tony855/foodflow-standard.git', 'https://github.com/Tony855/foodflow-enterprise.git', 'https://github.com/Tony855/foodflow-enterprise-ultimate.git'].some((legacyUrl) => source.includes(legacyUrl)), file + ' must not fetch from a legacy repository');
   }
 });
 
