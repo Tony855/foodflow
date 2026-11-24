@@ -62,18 +62,8 @@ log_info "部署代码到 $DEPLOY_TARGET..."
 # 创建目标目录
 mkdir -p "$DEPLOY_TARGET"
 
-REPO_NAME="$(basename "$PROJECT_DIR")"
-case "$REPO_NAME" in
-    *enterprise-ultimate*|*ultimate*)
-        GIT_REPO="https://github.com/Tony855/foodflow-enterprise-ultimate.git"
-        ;;
-    *enterprise*)
-        GIT_REPO="https://github.com/Tony855/foodflow-enterprise.git"
-        ;;
-    *)
-        GIT_REPO="https://github.com/Tony855/foodflow.git"
-        ;;
-esac
+# All deployment editions are shipped from this canonical repository.
+GIT_REPO="https://github.com/Tony855/foodflow.git"
 
 if [ -d "$DEPLOY_TARGET/.git" ]; then
     log_info "检测到 Git 部署目录，检查工作区后执行安全快进更新..."
