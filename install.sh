@@ -180,7 +180,7 @@ update_existing_install() {
         return 1
     fi
     chmod 0700 "$updater_tmp"
-    if FF_APP_DIR="$target" FF_DEPLOY_SAFETY_LIB="$safety_tmp" FF_DEPLOY_LOCK_HELD=1 FF_FORCE_OVERWRITE=1 GIT_VERSION="$GIT_VERSION" bash "$updater_tmp"; then
+    if FF_APP_DIR="$target" FF_DEPLOY_SAFETY_LIB="$safety_tmp" FF_FORCE_OVERWRITE=1 FF_DEPLOY_LOCK_HELD=1 GIT_VERSION="$GIT_VERSION" bash "$updater_tmp"; then
         rm -f "$updater_tmp" "$safety_tmp"
         return 0
     else
