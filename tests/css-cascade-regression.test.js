@@ -77,7 +77,8 @@ test('admin list action styles are not redefined after the shared action rules',
     '#adminList .admin-card .actions button.edit-btn',
     '#cashierList .admin-card .actions button.edit-btn',
     '#adminList .admin-card .actions button.danger',
-    '#cashierList .admin-card .actions button.danger'
+    '#cashierList .admin-card .actions button.danger',
+    '.menu-actions button.danger'
   ];
   for (const selector of selectors) {
     let occurrences = 0;
