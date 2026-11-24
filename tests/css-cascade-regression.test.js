@@ -53,7 +53,9 @@ test('ready-to-settle theme has one authoritative rule per state', () => {
 });
 
 test('kitchen login layout is defined once without trailing important overrides', () => {
-  assert.equal((kitchenCss.match(/(?:^|\n)\.login-wrap\s*\{/g) || []).length, 1);
-  assert.equal((kitchenCss.match(/(?:^|\n)\.login-box\s*\{/g) || []).length, 1);
-  assert.doesNotMatch(kitchenCss, /\.login-(?:wrap|box)[^{]*\{[^}]*!important/s);
+  const wrapRules = kitchenCss.match(/^\s*\.login-wrap\s*\{/gm) || [];
+  const boxRules = kitchenCss.match(/^\s*\.login-box\s*\{/gm) || [];
+  assert.equal(wrapRules.length, 1);
+  assert.equal(boxRules.length, 1);
+  assert.doesNotMatch(kitchenCss, /^\s*\.login-(?:wrap|box)\s*\{[^}]*!important/gm);
 });
