@@ -442,3 +442,14 @@ test('systemd services throttle repeated startup crashes instead of restarting f
     assert.doesNotMatch(source, /Restart=always/, file + ' must not restart successful exits forever');
   }
 });
+
+
+test('enterprise cluster installers clone the canonical FoodFlow repository, not legacy slugs', () => {
+  for (const file of ['deploy/enterprise/cluster/deploy.sh', 'deploy/enterprise-ultimate/cluster/deploy.sh']) {
+    const source = read(file);
+    assert.ok(source.includes('git clone https://github.com/Tony855/foodflow.git /var/www/foodflow'), file + ' must clone canonical repository');
+    assert.doesNotMatch(source, /foodflow-enterprise(?:-ultimate)?\\.git/, file + ' must not use legacy repository slug');
+  }
+  const deploymentOverview = read('deploy/README.md');
+  assert.doesNotMatch(deploymentOverview, /foodflow-standard|foodflow-enterprise(?:-ultimate)?/);
+});
