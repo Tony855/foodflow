@@ -122,25 +122,7 @@ prepare_deploy_key() {
 # Use a short-lived askpass helper for private-repository tokens. Never place
 # credentials in a remote URL, command-line argument, or persistent git config.
 git_with_optional_token() {
-    if [ -z "${GITHUB_TOKEN:-}" ]; then
-        "$@"
-        return $?
-    fi
-
-    local askpass rc
-    askpass="$(mktemp /tmp/foodflow-git-askpass.XXXXXX)" || return 1
-    cat > "$askpass" <<'ASKPASS'
-#!/bin/sh
-case "$1" in
-  *Username*) printf '%s\n' "x-access-token" ;;
-  *) printf '%s' "${FOODFLOW_GITHUB_TOKEN:-}" ;;
-esac
-ASKPASS
-    chmod 0700 "$askpass"
-    FOODFLOW_GITHUB_TOKEN="$GITHUB_TOKEN" GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0 "$@"
-    rc=$?
-    rm -f "$askpass"
-    return "$rc"
+    ff_git_with_optional_token "$@"
 }
 
 # ===== 已安装时的更新模式 =====
@@ -221,7 +203,7 @@ update_existing_install() {
         git -C "$target" status --short
         return 1
     fi
-    git -C "$target" fetch --no-tags origin "$GIT_VERSION" || { log_error "获取 $GIT_VERSION 失败"; return 1; }
+    ff_git_with_optional_token git -C "$target" fetch --no-tags origin "$GIT_VERSION" || { log_error "获取 $GIT_VERSION 失败"; return 1; }
     updater_tmp="$(mktemp /tmp/foodflow-remote-update.XXXXXX)"
     safety_tmp="$(mktemp /tmp/foodflow-deploy-safety.XXXXXX)"
     if ! git -C "$target" show FETCH_HEAD:remote-update.sh > "$updater_tmp"; then
