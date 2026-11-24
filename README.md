@@ -999,3 +999,8 @@ sudo bash uninstall.sh
 ## 许可与使用
 
 本项目当前按私有项目方式管理。未经仓库所有者许可，请勿复制、分发或用于未授权的商业部署。
+
+
+## Installation source repository
+
+All deployment modes and installer bootstrap downloads use the canonical repository `https://github.com/Tony855/foodflow.git`. Enterprise deployment variants are folders/configuration within this repository; they do not use separate legacy repository slugs.

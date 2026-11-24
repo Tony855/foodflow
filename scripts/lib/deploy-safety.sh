@@ -20,6 +20,34 @@ ff_acquire_deploy_lock() {
   export FF_DEPLOY_LOCK_HELD=1
 }
 
+
+# Run Git with a short-lived askpass helper when a token is supplied.
+# The helper is removed on normal exit and on common termination signals.
+ff_git_with_optional_token() (
+  if [ -z "${GITHUB_TOKEN:-}" ]; then
+    "$@"
+    exit $?
+  fi
+  local askpass rc
+  askpass="$(mktemp /tmp/foodflow-git-askpass.XXXXXX)" || exit 1
+  trap 'rm -f -- "$askpass"' EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  cat > "$askpass" <<'ASKPASS'
+#!/bin/sh
+case "$1" in
+  *Username*) printf '%s\n' "x-access-token" ;;
+  *) printf '%s' "${FOODFLOW_GITHUB_TOKEN:-}" ;;
+esac
+ASKPASS
+  chmod 0700 "$askpass"
+  set +e
+  FOODFLOW_GITHUB_TOKEN="$GITHUB_TOKEN" GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0 "$@"
+  rc=$?
+  exit "$rc"
+)
+
 ff_require_clean_git_worktree() {
   local status
   status="$(git status --porcelain --untracked-files=normal)" || return 1

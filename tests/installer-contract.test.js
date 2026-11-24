@@ -332,6 +332,7 @@ test('top-level deployment guides and standard installer use the current reposit
   assert.ok(standardGuide.includes('执行定时任务 | false'));
   assert.ok(deployGuide.includes('Tony855/foodflow.git'));
   assert.ok(standardScript.includes('GIT_REPO="https://github.com/Tony855/foodflow.git"'));
+  assert.doesNotMatch(standardScript, /foodflow-enterprise(?:-ultimate)?\.git/);
 });
 
 
@@ -441,4 +442,80 @@ test('systemd services throttle repeated startup crashes instead of restarting f
     assert.match(source, /Restart=on-failure/, file + ' must restart only failed processes');
     assert.doesNotMatch(source, /Restart=always/, file + ' must not restart successful exits forever');
   }
+});
+
+
+test('enterprise cluster installers clone the canonical FoodFlow repository, not legacy slugs', () => {
+  for (const file of ['deploy/enterprise/cluster/deploy.sh', 'deploy/enterprise-ultimate/cluster/deploy.sh']) {
+    const source = read(file);
+    assert.ok(source.includes('git clone https://github.com/Tony855/foodflow.git /var/www/foodflow'), file + ' must clone canonical repository');
+    assert.ok(!source.includes('foodflow-enterprise.git') && !source.includes('foodflow-enterprise-ultimate.git'), file + ' must not use legacy repository slug');
+  }
+  const deploymentOverview = read('deploy/README.md');
+  assert.doesNotMatch(deploymentOverview, /foodflow-standard|foodflow-enterprise(?:-ultimate)?/);
+  for (const file of [
+    'deploy/standard/deploy.sh',
+    'deploy/enterprise/cluster/deploy.sh',
+    'deploy/enterprise-ultimate/cluster/deploy.sh'
+  ]) {
+    const source = read(file);
+    assert.ok(source.includes('https://github.com/Tony855/foodflow.git'), file + ' must use canonical source');
+    assert.ok(source.includes('https://github.com/Tony855/foodflow.git'), file + ' must validate the exact canonical origin before updating');
+    assert.ok(source.includes('ff_require_clean_git_worktree'), file + ' must reject dirty worktrees');
+    assert.doesNotMatch(source, /foodflow-enterprise(?:-ultimate)?\.git/, file + ' must not use a legacy repository');
+  }
+});
+
+test('all installer source and bootstrap paths resolve to the canonical FoodFlow repository', () => {
+  const install = read('install.sh');
+  const local = read('install-local.sh');
+  const remoteUpdate = read('remote-update.sh');
+  assert.ok(install.includes('https://github.com/Tony855/foodflow.git'));
+  assert.ok(install.includes('https://github.com/Tony855/foodflow/archive/refs/heads/$BOOTSTRAP_VERSION.tar.gz'));
+  assert.ok(local.includes('https://github.com/Tony855/foodflow.git'));
+  assert.ok(install.includes('git_with_optional_token git clone --branch "$GIT_VERSION" https://github.com/Tony855/foodflow.git'));
+  assert.ok(install.includes('git_with_optional_token git fetch --no-tags origin "$GIT_VERSION"'));
+  assert.ok(install.includes('ff_require_clean_git_worktree || return 1'));
+  assert.ok(!install.includes('https://${GITHUB_TOKEN}@github.com/'), 'GitHub token must never be embedded in a remote URL');
+  assert.ok(!install.includes('git pull origin main || log_warn'), 'installer must fail closed when updating an existing checkout');
+  assert.ok(remoteUpdate.includes('git fetch --no-tags origin "$GIT_VERSION"'));
+  assert.match(remoteUpdate, /git remote get-url origin/);
+  assert.ok(remoteUpdate.includes('[ "$normalized_origin" = "https://github.com/Tony855/foodflow" ]'), 'remote updater must compare the normalized origin against the exact canonical repository');
+  assert.match(remoteUpdate, /canonical FoodFlow 仓库，拒绝更新/);
+  assert.ok(remoteUpdate.indexOf('git remote get-url origin') < remoteUpdate.indexOf('git fetch --no-tags origin'));
+  const safety = read('scripts/lib/deploy-safety.sh');
+  assert.match(safety, /ff_git_with_optional_token\(\)/);
+  assert.match(safety, /trap 'rm -f -- "\$askpass"' EXIT/);
+  assert.match(safety, /GIT_TERMINAL_PROMPT=0/);
+  assert.match(safety, /printf '%s\\n' "x-access-token"/);
+  assert.match(remoteUpdate, /ff_git_with_optional_token git fetch --no-tags origin "\$GIT_VERSION"/);
+  assert.match(remoteUpdate, /git check-ref-format --branch "\$GIT_VERSION"/);
+  assert.match(install, /ff_git_with_optional_token git -C "\$target" fetch --no-tags origin "\$GIT_VERSION"/);
+  for (const file of [
+    'install.sh', 'install-local.sh', 'remote-update.sh',
+    'deploy/standard/deploy.sh',
+    'deploy/enterprise/cluster/deploy.sh',
+    'deploy/enterprise-ultimate/cluster/deploy.sh'
+  ]) {
+    const source = read(file);
+    assert.ok(!['https://github.com/Tony855/foodflow-standard.git', 'https://github.com/Tony855/foodflow-enterprise.git', 'https://github.com/Tony855/foodflow-enterprise-ultimate.git'].some((legacyUrl) => source.includes(legacyUrl)), file + ' must not fetch from a legacy repository');
+  }
+});
+
+
+test('local fallback clone protects non-empty targets and honors the selected branch or tag', () => {
+  const local = read('install-local.sh');
+  assert.match(local, /find "\$APP_DIR" -mindepth 1 -maxdepth 1 -print -quit/);
+  assert.match(local, /目标目录非空且没有 server\.js；为保护现有文件，拒绝克隆覆盖/);
+  assert.match(local, /GIT_VERSION="\$\{GIT_VERSION:-main\}"/);
+  assert.match(local, /git check-ref-format --branch "\$GIT_VERSION"/);
+  assert.match(local, /git clone --branch "\$GIT_VERSION" --single-branch "\$REPO_URL" "\$APP_DIR"/);
+  assert.match(local, /ff_git_with_optional_token git clone/);
+});
+
+test('existing standard installation updates the explicitly selected version', () => {
+  const installer = read('install.sh');
+  assert.match(installer, /git_with_optional_token git fetch --no-tags origin "\$GIT_VERSION"/);
+  assert.match(installer, /git merge --ff-only FETCH_HEAD/);
+  assert.doesNotMatch(installer, /git fetch --no-tags origin main/);
 });

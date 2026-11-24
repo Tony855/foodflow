@@ -62,22 +62,18 @@ log_info "部署代码到 $DEPLOY_TARGET..."
 # 创建目标目录
 mkdir -p "$DEPLOY_TARGET"
 
-REPO_NAME="$(basename "$PROJECT_DIR")"
-case "$REPO_NAME" in
-    *enterprise-ultimate*|*ultimate*)
-        GIT_REPO="https://github.com/Tony855/foodflow-enterprise-ultimate.git"
-        ;;
-    *enterprise*)
-        GIT_REPO="https://github.com/Tony855/foodflow-enterprise.git"
-        ;;
-    *)
-        GIT_REPO="https://github.com/Tony855/foodflow.git"
-        ;;
-esac
+# All deployment editions are shipped from this canonical repository.
+GIT_REPO="https://github.com/Tony855/foodflow.git"
 
 if [ -d "$DEPLOY_TARGET/.git" ]; then
     log_info "检测到 Git 部署目录，检查工作区后执行安全快进更新..."
     cd "$DEPLOY_TARGET"
+    origin_url="$(git remote get-url origin 2>/dev/null || true)"
+    normalized_origin="$(printf '%s' "$origin_url" | sed -E 's#^(git@github\.com:|https://github\.com/)#https://github.com/#; s#\.git$##; s#/$##')"
+    if [ "$normalized_origin" != "https://github.com/Tony855/foodflow" ]; then
+        log_error "现有 Git remote origin 不是 Tony855/foodflow，拒绝更新。"
+        exit 1
+    fi
     ff_require_clean_git_worktree
     git pull --ff-only origin main
     log_success "代码快进更新完成"

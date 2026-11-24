@@ -61,10 +61,26 @@ if [ ! -f "$APP_DIR/server.js" ]; then
     cd "$APP_DIR"
     if [ ! -f server.js ]; then
         log_info "拉取仓库到 $APP_DIR..."
-    
+
+        # Never clone into a directory containing operator data or an unknown checkout.
+        if [ -n "$(find "$APP_DIR" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
+            log_error "目标目录非空且没有 server.js；为保护现有文件，拒绝克隆覆盖。"
+            exit 1
+        fi
+        GIT_VERSION="${GIT_VERSION:-main}"
+        case "$GIT_VERSION" in
+            ""|*@\{*)
+                log_error "无效的 GIT_VERSION：$GIT_VERSION"
+                exit 1
+                ;;
+        esac
+        if ! git check-ref-format --branch "$GIT_VERSION" >/dev/null 2>&1; then
+            log_error "GIT_VERSION 不是有效的 Git 分支或标签引用：$GIT_VERSION"
+            exit 1
+        fi
         REPO_URL="https://github.com/Tony855/foodflow.git"
-        log_info "使用公开仓库 HTTPS 方式拉取"
-        git clone "$REPO_URL" .
+        log_info "从 canonical FoodFlow 仓库获取版本 $GIT_VERSION"
+        ff_git_with_optional_token git clone --branch "$GIT_VERSION" --single-branch "$REPO_URL" "$APP_DIR"
     fi
     log_success "代码已就位: $APP_DIR"
 else

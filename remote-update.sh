@@ -27,6 +27,16 @@ done
 
 SKIP_GIT_UPDATE="${SKIP_GIT_UPDATE:-0}"
 GIT_VERSION="${GIT_VERSION:-main}"
+case "$GIT_VERSION" in
+  ""|*@\{*)
+    echo "[ERROR] 无效的 GIT_VERSION：$GIT_VERSION" >&2
+    exit 1
+    ;;
+esac
+git check-ref-format --branch "$GIT_VERSION" >/dev/null 2>&1 || {
+  echo "[ERROR] GIT_VERSION 不是有效的 Git 分支或标签引用：$GIT_VERSION" >&2
+  exit 1
+}
 OLD_SHA=""
 TARGET_SHA=""
 SOURCE_CHANGED=0
@@ -68,12 +78,24 @@ trap rollback_update EXIT
 
 if [ "$SKIP_GIT_UPDATE" != "1" ]; then
   [ -d .git ] || { echo "[ERROR] 当前目录不是 Git 仓库: $SCRIPT_DIR" >&2; exit 1; }
+  # Never update a checkout whose origin points outside the canonical project.
+  origin_url=""
+  normalized_origin=""
+  origin_url="$(git remote get-url origin 2>/dev/null)" || {
+    echo "[ERROR] Git origin 缺失，拒绝执行远程更新。" >&2
+    exit 1
+  }
+  normalized_origin="$(printf '%s' "$origin_url" | sed -E 's#^(git@github\.com:|ssh://git@github\.com/|https://github\.com/)#https://github.com/#; s#\.git$##; s#/$##')"
+  [ "$normalized_origin" = "https://github.com/Tony855/foodflow" ] || {
+    echo "[ERROR] Git origin 不是 canonical FoodFlow 仓库，拒绝更新。" >&2
+    exit 1
+  }
   ff_require_clean_git_worktree
   OLD_SHA="$(git rev-parse HEAD)"
   STAGE="$(mktemp -d "$SCRIPT_DIR/.foodflow-update.XXXXXX")"
   OLD_NODE_MODULES="$STAGE/node_modules.previous"
   echo "[INFO] 获取目标版本 $GIT_VERSION..."
-  git fetch --no-tags origin "$GIT_VERSION"
+  ff_git_with_optional_token git fetch --no-tags origin "$GIT_VERSION"
   TARGET_SHA="$(git rev-parse FETCH_HEAD)"
   [ -n "$TARGET_SHA" ] || { echo "[ERROR] 无法解析目标提交。" >&2; exit 1; }
   if [ "$TARGET_SHA" = "$OLD_SHA" ]; then

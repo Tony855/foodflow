@@ -1,6 +1,6 @@
 # FoodFlow 部署配置
 
-本目录包含 FoodFlow 点餐系统的部署配置，按版本分类。
+本目录包含 FoodFlow 点餐系统的部署配置，按部署模式分类；所有模式均从同一 canonical repository `https://github.com/Tony855/foodflow.git` 获取源码，模式差异由该仓库内的配置目录决定。
 
 ---
 
@@ -58,7 +58,7 @@ deploy/
 | **登录日志** | ❌ | ❌ | ✅ |
 | **商户自助注册** | ❌ | ❌ | ✅（可配置） |
 | **数据库名** | foodflow_standard | foodflow_enterprise | foodflow_enterprise_ultimate |
-| **GitHub仓库** | foodflow-standard | foodflow-enterprise | foodflow-enterprise |
+| **GitHub仓库** | Tony855/foodflow | Tony855/foodflow | Tony855/foodflow |
 | **配置要求** | 2核4GB | 2台4核8GB + 独立DB/Redis | 3台以上8核16GB + 高可用DB/Redis |
 
 ---

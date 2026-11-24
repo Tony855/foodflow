@@ -71,6 +71,14 @@ log_info "部署代码到 /var/www/foodflow..."
 if [ -d /var/www/foodflow/.git ]; then
     log_info "检测到已部署，执行 git pull 更新..."
     cd /var/www/foodflow
+    origin_url="$(git remote get-url origin 2>/dev/null || true)"
+    normalized_origin="$(printf '%s' "$origin_url" | sed -E 's#^(git@github\.com:|https://github\.com/)#https://github.com/#; s#\.git$##; s#/$##')"
+    if [ "$normalized_origin" != "https://github.com/Tony855/foodflow" ]; then
+        log_error "现有 Git remote origin 不是 Tony855/foodflow，拒绝更新。"
+        exit 1
+    fi
+    ff_require_clean_git_worktree
+    cd /var/www/foodflow
     if [ -n "$(git status --porcelain)" ]; then
         log_error "部署目录存在未提交修改；为避免覆盖人工变更，已停止更新"
         exit 1
@@ -86,7 +94,7 @@ else
         log_warn "目录已存在且非空，备份到 $BACKUP_DIR"
         mv /var/www/foodflow "$BACKUP_DIR"
     fi
-    git clone https://github.com/Tony855/foodflow-enterprise.git /var/www/foodflow
+    git clone https://github.com/Tony855/foodflow.git /var/www/foodflow
 fi
 log_success "代码部署完成"
 

@@ -818,3 +818,41 @@ mysql -u root -p ordering_system < backup.sql
 
 **相关**：MariaDB 严格检测（二进制 + systemd unit）、域名环境变量化，
 见 commit `12fec82`。
+
+
+## 安装器源码仓库与下载路径核对
+
+所有安装模式统一使用唯一源码仓库：
+
+`https://github.com/Tony855/foodflow.git`
+
+| 入口 | 实际来源 | 说明 |
+|---|---|---|
+| Git 克隆 | `https://github.com/Tony855/foodflow.git` | 标准版、企业版、企业旗舰版共用同一仓库 |
+| 单文件 Bootstrap | 本仓库的 `install.sh` | 检测到缺少公共 helper 时，下载完整源码归档后从解压目录重新启动 |
+| Bootstrap 归档 | `https://github.com/Tony855/foodflow/archive/refs/heads/main.tar.gz` | URL 使用 `GIT_VERSION` 选择分支；此单文件归档入口按分支下载，不应把 tag 当作 branch |
+| 已安装版本更新 | 目标版本的 Git remote `origin` | 先检查工作区，再 fetch 指定版本并调用该版本的事务式更新器 |
+
+标准、企业和企业旗舰版只是本仓库中的部署配置，不是独立的 `foodflow-standard`、`foodflow-enterprise` 或 `foodflow-enterprise-ultimate` 源码仓库。标准版部署脚本、两个集群部署脚本和安装器必须保持相同的 canonical repository。
+
+### 推荐安装方式
+
+优先克隆完整仓库后运行安装器：
+
+```bash
+git clone https://github.com/Tony855/foodflow.git
+cd foodflow
+sudo bash install.sh
+```
+
+如需固定到分支，可在执行前设置 `GIT_VERSION=分支名`。完整 Git 克隆入口可使用 Git 支持的 branch/tag；但直接运行单文件 Bootstrap 时，`GIT_VERSION` 必须是分支名，因为归档 URL 使用 `refs/heads/`。
+
+### 安装路径安全规则
+
+- 不要从旧的独立仓库地址获取标准版或企业版代码。
+- 不要在生产目录存在未提交改动时强行更新。
+- 更新失败必须视为失败，不应输出“更新完成”后继续使用不确定版本。
+- 不要把 GitHub Token 写入远端 URL、日志或文档；Token 只应通过受控凭据机制提供。
+- 集群部署的目标目录为空时才克隆 canonical repository；已有 Git 工作区必须先验证来源和状态。
+
+如遇到下载失败，先确认分支名称、仓库访问权限、DNS/HTTPS 连通性以及归档是否可访问，不要改用旧仓库地址绕过错误。
