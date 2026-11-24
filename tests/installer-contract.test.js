@@ -500,3 +500,20 @@ test('all installer source and bootstrap paths resolve to the canonical FoodFlow
     assert.doesNotMatch(source, /github\.com\/Tony855\/foodflow-(?:standard|enterprise(?:-ultimate)?)\.git/, file + ' must not fetch from a legacy repository');
   }
 });
+
+
+test('local fallback clone protects non-empty targets and honors the selected branch or tag', () => {
+  const local = read('install-local.sh');
+  assert.match(local, /find "\$APP_DIR" -mindepth 1 -maxdepth 1 -print -quit/);
+  assert.match(local, /目标目录非空且没有 server\.js；为保护现有文件，拒绝克隆覆盖/);
+  assert.match(local, /GIT_VERSION="\$\{GIT_VERSION:-main\}"/);
+  assert.match(local, /git clone --branch "\$GIT_VERSION" --single-branch "\$REPO_URL" "\$APP_DIR"/);
+  assert.match(local, /ff_git_with_optional_token git clone/);
+});
+
+test('existing standard installation updates the explicitly selected version', () => {
+  const installer = read('install.sh');
+  assert.match(installer, /git_with_optional_token git fetch --no-tags origin "\$GIT_VERSION"/);
+  assert.match(installer, /git merge --ff-only FETCH_HEAD/);
+  assert.doesNotMatch(installer, /git fetch --no-tags origin main/);
+});
