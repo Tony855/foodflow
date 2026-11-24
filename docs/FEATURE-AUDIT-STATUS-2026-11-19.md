@@ -538,3 +538,45 @@
 3. 完成 Telegram 多商户 staging、生产备份恢复演练/RPO/RTO 和 Redis 多节点故障注入。
 4. 由仓库管理员启用 main branch protection / rulesets，并验证 required checks 生效。
 5. 人工分类静态审计候选，不按启发式结果直接删除。
+
+
+### 15.4 PR #18 合并后 main 最终复核（2026-11-24 03:40 UTC）
+
+本节记录 PR #18 文档审计记录合并后的同 SHA 验证。PR #18 仅增加本审计文档 39 行，无业务代码、数据库 schema、支付行为或生产配置修改。
+
+#### 合并与同 SHA 工作流
+
+- PR #18（`docs: record PR #17 post-merge audit results`）head `ea34cb8e6684583d52ded0ac119ecd16faacf84c`，于 2026-11-24 03:37:30 UTC squash merge。
+- merge commit / 当前 main SHA：`d589f69cff3c650d896673eaf3a50aa6be9d6723`。
+- main push CI [45320808913](https://github.com/Tony855/foodflow/actions/runs/45320808913)：validate、MySQL 8.4、MariaDB 10.11/11.4/11.8/12.3 全部 success。
+- main push Installer Compatibility [45320808916](https://github.com/Tony855/foodflow/actions/runs/45320808916)：Debian 12/13、Ubuntu 22.04/24.04/26.04 全部 success。
+- main push Daily Security and Quality Audit [45320808921](https://github.com/Tony855/foodflow/actions/runs/45320808921)：Dependencies and regression suite、CodeQL 均 success。
+- 三个工作流均以完全相同的 main SHA `d589f69cff3c650d896673eaf3a50aa6be9d6723` 完成；没有借用旧提交或 PR head 的检查结果。
+
+#### 测试与安全扫描
+
+- main validate 日志：809 tests、783 pass、0 fail、26 skipped。26 项为未在通用 validate job 配置 `MYSQL_INTEGRATION_URL` 的数据库集成测试；这些不能计作通过。
+- MySQL 8.4 与 MariaDB 10.11/11.4/11.8/12.3 财务集成 jobs 全部 success。MariaDB 10.11 日志中 finance integration 23 pass、0 fail、0 skipped；备份恢复、session token migration、Telegram outbox 集成子测试分别执行成功。MySQL 8.4 finance integration 23 pass、0 fail、0 skipped。
+- Dependencies and regression suite success；validate 中生产依赖审计输出 `found 0 vulnerabilities`。这是 npm audit 的本次结果，不代表 GitHub Dependabot 或全部 code-scanning alerts 已独立清零。
+- CodeQL success，扫描本次调用范围内 305/305 JavaScript 文件及 11/11 HTML 文件，并成功上传 SARIF。
+- 安装兼容矩阵五种系统全部成功：Debian 12/13、Ubuntu 22.04/24.04/26.04。
+
+#### 端到端与跨租户测试缺口复核
+
+- 当前根 `package.json` 测试入口仍为 Node 内置 `node --test`；依赖中未见 Playwright 或 Puppeteer。仓库当前没有已配置的浏览器 E2E runner，因此扫码顾客下单 → KDS → 收银结算 → 退款仍未获得真实浏览器端到端验收。
+- 已有若干细粒度隔离测试：`tests/admin-store-access.test.js` 覆盖子管理员门店分配；`tests/order-store-scope.test.js` 覆盖订单门店上下文；`tests/auth-store-scope.test.js` 覆盖收银 session 的商户/门店状态；`tests/financial-reconciliation-object-authorization.test.js` 覆盖财务对账对象 ID 猜测及禁止越权写入。
+- 上述测试不等于全站跨租户攻击测试。仍需覆盖订单、退款、菜单/商品、打印任务、Socket.IO 事件、文件/导出、后台管理等对象级访问，并验证伪造 merchant/store ID、跨店 IDOR、无效/撤销会话、读写副作用和审计记录。
+- 本轮未引入 Playwright 依赖或浏览器测试代码：当前可用操作是 GitHub 文件/API 与 CI 结果，不能在真实浏览器/应用部署环境中验证登录态、扫码、打印和多角色完整旅程；不以静态模拟冒充浏览器验收。
+
+#### 未解除事项
+
+- main branch protection / rulesets 仍需仓库管理员处理。此前 Rulesets 列表为空，branch protection 读取接口对当前连接返回 403；无法由当前权限配置 required checks。管理员应设置 PR required、全部关键 CI/数据库/安全/安装检查 required，禁止 force-push 和删除，并在启用后重新验证。
+- 真实支付方 sandbox/商户凭据、退款 callback、自动结算与总账过账、财务账户映射及签字、Telegram 多商户 staging、生产备份恢复/RPO/RTO、多节点 Redis/Socket.IO 故障注入、真实打印设备验收仍需相应外部环境和授权。
+- 本次工作流均在 GitHub Actions 测试环境执行；没有访问生产数据库、客户数据或支付凭据，也没有执行生产支付、退款或迁移。
+
+#### 下一批执行顺序
+
+1. 引入可在 CI 运行的浏览器 E2E 基础设施，先完成扫码下单、KDS 接单、收银结算、退款及权限拒绝主路径。
+2. 按业务对象批量扩展跨商户/跨门店 IDOR 测试，重点覆盖订单、退款、菜单、打印、Socket.IO、文件和导出；所有拒绝路径断言无数据库写入/无外发事件。
+3. 由管理员启用 main protection / rulesets 并验证 required checks。
+4. 获得支付方 sandbox 与财务审批后再闭环真实支付 callback、退款和总账；完成生产备份恢复、RPO/RTO 与多节点故障注入。
