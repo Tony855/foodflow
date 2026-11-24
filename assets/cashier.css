@@ -599,8 +599,8 @@ body {
   white-space: nowrap;
 }
 .pos-dish-status.done {
-  background: #d4edda;
-  color: #155724;
+  background: #e0f2fe;
+  color: #0369a1;
 }
 .pos-dish-status.pending {
   background: #fff3cd;
@@ -1260,15 +1260,15 @@ body {
 }
 
 /* ============================================================
-   待结订单细分：可结算 vs 等菜中（2026-10-01）
+   待结订单细分：可结算 vs 等菜中（统一天蓝色主题）
    ============================================================ */
 .pos-order-card.status-pending.ready-to-settle {
-  border-left: 4px solid #2ecc71 !important;
-  background: linear-gradient(135deg, #f6fdf9 0%, #e6f8ee 100%) !important;
+  border-left: 4px solid #0ea5e9 !important;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
 }
 .pos-order-card.status-pending.ready-to-settle:hover {
-  border-color: #2ecc71 !important;
-  box-shadow: 0 4px 14px rgba(46, 204, 113, 0.22);
+  border-color: #0ea5e9 !important;
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.24) !important;
 }
 
 .pos-order-card.status-pending.waiting-items {
@@ -1304,13 +1304,13 @@ body {
   color: #856404;
 }
 
-/* 可结算卡片加轻微脉冲提示（可选，更醒目） */
+/* 可结算卡片使用天蓝色脉冲提示 */
 .pos-order-card.ready-to-settle {
-  animation: pos-ready-pulse 2.4s ease-in-out infinite;
+  animation: pos-ready-pulse-sky 2.4s ease-in-out infinite;
 }
-@keyframes pos-ready-pulse {
+@keyframes pos-ready-pulse-sky {
   0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-  50%      { box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.12); }
+  50%      { box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.14); }
 }
 
 @media (max-width: 768px) {
@@ -1318,34 +1318,9 @@ body {
   .pos-card-wait-tip { font-size: 10px; padding: 2px 6px; }
 }
 
-/* ============================================================
-   "可结算" 状态改天蓝（覆盖旧绿色，2026-10-01）
-   ============================================================ */
-.pos-order-card.status-pending.ready-to-settle {
-  border-left: 4px solid #0ea5e9 !important;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
-}
-.pos-order-card.status-pending.ready-to-settle:hover {
-  border-color: #0ea5e9 !important;
-  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.24) !important;
-}
+/* 可结算状态的选中态 */
 .pos-order-card.status-pending.ready-to-settle.selected {
   background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%) !important;
-}
-
-/* 徽章：可结算 → 天蓝 */
-.pos-card-ready-tip {
-  background: #e0f2fe !important;
-  color: #0369a1 !important;
-}
-
-/* 脉冲动画也换天蓝 */
-.pos-order-card.ready-to-settle {
-  animation: pos-ready-pulse-sky 2.4s ease-in-out infinite;
-}
-@keyframes pos-ready-pulse-sky {
-  0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-  50%      { box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.14); }
 }
 
 /* ============================================================
