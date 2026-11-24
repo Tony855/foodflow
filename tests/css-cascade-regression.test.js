@@ -49,7 +49,10 @@ test('ready-to-settle theme has one authoritative rule per state', () => {
   assert.equal((cashierCss.match(/(?:^|\n)\.pos-card-ready-tip\s*\{/g) || []).length, 1);
   assert.equal((cashierCss.match(/(?:^|\n)\.pos-order-card\.ready-to-settle\s*\{/g) || []).length, 1);
   assert.match(cashierCss, /border-left:\s*4px solid #0ea5e9/);
-  assert.doesNotMatch(cashierCss, /border-left:\s*4px solid #2ecc71/);
+  const readyRule = cashierCss.match(/\.pos-order-card\.status-pending\.ready-to-settle\s*\{([^}]*)\}/);
+  assert.ok(readyRule);
+  assert.match(readyRule[1], /border-left:\s*4px solid #0ea5e9/);
+  assert.doesNotMatch(readyRule[1], /border-left:\s*4px solid #2ecc71/);
 });
 
 test('kitchen login layout is defined once without trailing important overrides', () => {
