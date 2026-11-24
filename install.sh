@@ -530,8 +530,8 @@ install_single() {
             return 1
         fi
         ff_require_clean_git_worktree || return 1
-        git_with_optional_token git fetch --no-tags origin main || { log_error "获取 canonical repository main 分支失败"; return 1; }
-        git merge --ff-only FETCH_HEAD || { log_error "无法快进更新到 canonical repository main；请检查本地提交"; return 1; }
+        git_with_optional_token git fetch --no-tags origin "$GIT_VERSION" || { log_error "获取 canonical repository 版本 $GIT_VERSION 失败"; return 1; }
+        git merge --ff-only FETCH_HEAD || { log_error "无法快进更新到 canonical repository 版本 $GIT_VERSION；请检查本地提交"; return 1; }
         log_success "代码快进更新完成"
     elif [ -f "$SCRIPT_DIR/server.js" ]; then
         # 当前目录有代码（但不是 git）：直接复制
