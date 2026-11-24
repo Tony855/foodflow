@@ -37,7 +37,7 @@ ff_git_with_optional_token() (
   cat > "$askpass" <<'ASKPASS'
 #!/bin/sh
 case "$1" in
-  *Username*) printf '%s\\n' "x-access-token" ;;
+  *Username*) printf '%s\n' "x-access-token" ;;
   *) printf '%s' "${FOODFLOW_GITHUB_TOKEN:-}" ;;
 esac
 ASKPASS
