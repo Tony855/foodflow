@@ -68,6 +68,17 @@ trap rollback_update EXIT
 
 if [ "$SKIP_GIT_UPDATE" != "1" ]; then
   [ -d .git ] || { echo "[ERROR] 当前目录不是 Git 仓库: $SCRIPT_DIR" >&2; exit 1; }
+  # Never update a checkout whose origin points outside the canonical project.
+  local origin_url normalized_origin
+  origin_url="$(git remote get-url origin 2>/dev/null)" || {
+    echo "[ERROR] Git origin 缺失，拒绝执行远程更新。" >&2
+    exit 1
+  }
+  normalized_origin="$(printf '%s' "$origin_url" | sed -E 's#^(git@github\.com:|ssh://git@github\.com/|https://github\.com/)#https://github.com/#; s#\.git$##; s#/$##')"
+  [ "$normalized_origin" = "https://github.com/Tony855/foodflow" ] || {
+    echo "[ERROR] Git origin 不是 canonical FoodFlow 仓库，拒绝更新。" >&2
+    exit 1
+  }
   ff_require_clean_git_worktree
   OLD_SHA="$(git rev-parse HEAD)"
   STAGE="$(mktemp -d "$SCRIPT_DIR/.foodflow-update.XXXXXX")"
