@@ -478,3 +478,24 @@
 - Daily Security and Quality Audit push run [45306254883](https://github.com/Tony855/foodflow/actions/runs/45306254883)：CodeQL success；Dependencies and regression suite = skipped（push event 条件）。此 SHA 的代码与 PR #14 仅文档更新；完整依赖/回归任务已在 2026-11-23 schedule run [45141719537](https://github.com/Tony855/foodflow/actions/runs/45141719537) 上成功执行。
 - Installer Compatibility run [45306254945](https://github.com/Tony855/foodflow/actions/runs/45306254945) 五种环境全部 success：Debian 12/13、Ubuntu 22.04/24.04/26.04。
 - 因此 PR #14 merge commit 的 post-merge CI、数据库矩阵、CodeQL job 和安装兼容矩阵全部完成并成功；完整依赖/回归在 post-merge push run 中被跳过，不计作执行通过。
+
+
+
+### 15.2 PR #16 合并后的 main 复核（2026-11-24，Asia/Phnom_Penh）
+
+本节为 15.0/15.1 之后的增量复核；以下 SHA、run 与结果优先用于描述 PR #16 合并后的当前状态。历史小节保留审计轨迹，不应再将其中的旧 main SHA 当作当前 main。
+
+- PR #16（安装器仓库路径、Git 来源验证、Token 安全处理与部署文档）已于 2026-11-24 03:16:33 UTC squash merge。merge commit：`ca9d873c87a731afcee0293b72d57fe044901ca3`；main 当前指向该提交。
+- PR #16 head `9181d98862f1947f55ff6cd965cf969de50b98af` 的 CI run [45318065978](https://github.com/Tony855/foodflow/actions/runs/45318065978)、Daily Security and Quality Audit run [45318066024](https://github.com/Tony855/foodflow/actions/runs/45318066024)、Installer Compatibility run [45318066033](https://github.com/Tony855/foodflow/actions/runs/45318066033) 全部 success；所有 job 均完成。
+- 合并后 main push 的 CI run [45318354683](https://github.com/Tony855/foodflow/actions/runs/45318354683)：validate、MySQL 8.4、MariaDB 10.11/11.4/11.8/12.3 全部 success。validate 测试日志：809 tests、783 pass、0 fail、26 skipped；26 项因该通用 job 未配置 MYSQL_INTEGRATION_URL 而跳过，独立 MySQL/MariaDB 集成矩阵已执行成功。生产依赖审计输出 found 0 vulnerabilities。
+- 合并后 main push 的 Installer Compatibility run [45318354604](https://github.com/Tony855/foodflow/actions/runs/45318354604)：Debian 12/13、Ubuntu 22.04/24.04/26.04 全部 success。
+- 合并后 main push 的 Daily Security and Quality Audit run [45318354622](https://github.com/Tony855/foodflow/actions/runs/45318354622)：CodeQL success；Dependencies and regression suite 为 skipped（workflow 条件明确不在 push 事件运行该 job）。不得将 skipped 记录为完整依赖审计通过。最近一次完整 schedule 证据仍为 2026-11-23 run [45141719537](https://github.com/Tony855/foodflow/actions/runs/45141719537)，运行 SHA `5d3060b45f9ff7f8f4f26806bafd494432a8103f`，其依赖与回归、CodeQL 均 success；它不是 PR #16 合并后的 SHA。
+- 仓库 main 分支保护读取：GitHub branch API 返回 `protected=false`，protection disabled，required status enforcement off；Rulesets 列表为空。该项仍是高优先级治理风险，尚未由代码或 CI 解决。当前连接无法通过只读 GitHub 接口替管理员写入分支保护设置。
+- PR #15（本审计文档）分支基于旧 main `8c4f44b...`，相对当前 main `ca9d873...` 落后 1 个提交；本节更新后必须对最新 PR head 重新跑检查，不得沿用此前旧 head 的检查结果。
+
+### 下一批行动
+
+1. 核验 2026-11-24 的每日 schedule 是否实际触发并完成完整依赖/回归审计；若仍未出现，记录为待观察，不用 push 事件替代。
+2. 管理员启用 main branch protection / rulesets，要求 PR 与全部关键 CI、安全、数据库和安装兼容检查；禁止 force-push 与删除，并在启用后读取验证。
+3. 继续为顾客下单 → KDS → 收银 → 退款补充浏览器端到端验收，以及跨租户对象级授权测试。
+4. 真实支付方 sandbox、财务账户映射与签字、Telegram 多商户 staging、生产备份恢复/RPO/RTO、多节点故障注入仍需真实环境和授权，不能由静态测试代替。
