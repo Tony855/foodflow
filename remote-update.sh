@@ -27,6 +27,16 @@ done
 
 SKIP_GIT_UPDATE="${SKIP_GIT_UPDATE:-0}"
 GIT_VERSION="${GIT_VERSION:-main}"
+case "$GIT_VERSION" in
+  ""|*@\{*)
+    echo "[ERROR] 无效的 GIT_VERSION：$GIT_VERSION" >&2
+    exit 1
+    ;;
+esac
+git check-ref-format --branch "$GIT_VERSION" >/dev/null 2>&1 || {
+  echo "[ERROR] GIT_VERSION 不是有效的 Git 分支或标签引用：$GIT_VERSION" >&2
+  exit 1
+}
 OLD_SHA=""
 TARGET_SHA=""
 SOURCE_CHANGED=0
