@@ -18,16 +18,15 @@ test('super dashboard stylesheet excludes retired standalone login and error mod
     '.error-modal', '.error-modal-card', '.error-modal-icon', '.error-modal-message', '.error-modal-btn'
   ];
   for (const selector of retiredSelectors) {
-    const escaped = selector.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
-    assert.doesNotMatch(superCss, new RegExp(escaped + '(?![\\w-])'), 'retired selector should not remain: ' + selector);
+    assert.equal(superCss.includes(selector), false, 'retired selector should not remain: ' + selector);
   }
 });
 
 test('super dashboard keeps shared form styles and dedicated login pages keep their own styling', () => {
-  assert.match(superCss, /\\.form-group\\s*\\{/);
-  assert.match(superHtml, /assets\\/super\\.css/);
-  assert.match(superLoginHtml, /assets\\/super-login\\.css/);
-  assert.match(superFirstLoginHtml, /assets\\/super-login\\.css/);
-  assert.match(superLoginCss, /\\.super-login-card\\s*\\{/);
-  assert.match(superLoginCss, /\\.login-error\\s*\\{/);
+  assert.ok(superCss.includes('.form-group {'));
+  assert.ok(superHtml.includes('assets/super.css'));
+  assert.ok(superLoginHtml.includes('assets/super-login.css'));
+  assert.ok(superFirstLoginHtml.includes('assets/super-login.css'));
+  assert.ok(superLoginCss.includes('.super-login-card {'));
+  assert.ok(superLoginCss.includes('.login-error {'));
 });
