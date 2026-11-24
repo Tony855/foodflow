@@ -69,11 +69,15 @@ if [ ! -f "$APP_DIR/server.js" ]; then
         fi
         GIT_VERSION="${GIT_VERSION:-main}"
         case "$GIT_VERSION" in
-            ""|*..*|*[!A-Za-z0-9._/-]*)
+            ""|*@\{*)
                 log_error "无效的 GIT_VERSION：$GIT_VERSION"
                 exit 1
                 ;;
         esac
+        if ! git check-ref-format --branch "$GIT_VERSION" >/dev/null 2>&1; then
+            log_error "GIT_VERSION 不是有效的 Git 分支或标签引用：$GIT_VERSION"
+            exit 1
+        fi
         REPO_URL="https://github.com/Tony855/foodflow.git"
         log_info "从 canonical FoodFlow 仓库获取版本 $GIT_VERSION"
         ff_git_with_optional_token git clone --branch "$GIT_VERSION" --single-branch "$REPO_URL" "$APP_DIR"
