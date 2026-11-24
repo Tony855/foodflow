@@ -483,6 +483,12 @@ test('all installer source and bootstrap paths resolve to the canonical FoodFlow
   assert.match(remoteUpdate, /https:\/\/github\.com\/Tony855\/foodflow/);
   assert.match(remoteUpdate, /canonical FoodFlow 仓库，拒绝更新/);
   assert.ok(remoteUpdate.indexOf('git remote get-url origin') < remoteUpdate.indexOf('git fetch --no-tags origin'));
+  const safety = read('scripts/lib/deploy-safety.sh');
+  assert.match(safety, /ff_git_with_optional_token\(\)/);
+  assert.match(safety, /trap 'rm -f -- "\$askpass"' EXIT/);
+  assert.match(safety, /GIT_TERMINAL_PROMPT=0/);
+  assert.match(remoteUpdate, /ff_git_with_optional_token git fetch --no-tags origin "\$GIT_VERSION"/);
+  assert.match(install, /ff_git_with_optional_token git -C "\$target" fetch --no-tags origin "\$GIT_VERSION"/);
   for (const file of [
     'install.sh', 'install-local.sh', 'remote-update.sh',
     'deploy/standard/deploy.sh',
