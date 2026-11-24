@@ -30,3 +30,8 @@ sudo bash install.sh
 ## 升级到集群
 
 需要双应用节点时，使用 [企业版集群手册](./deploy/enterprise/README.md)；需要多商户水平扩展时，使用 [企业旗舰版手册](./deploy/enterprise-ultimate/README.md)。集群必须配置共享 Redis、NFS 上传目录和可信反向代理，不能直接复用单机配置。
+
+
+## Source repository consistency
+
+Standard, Enterprise and Enterprise Ultimate deployment modes all use the canonical repository `https://github.com/Tony855/foodflow.git`. Cluster installers must not clone legacy `foodflow-enterprise` or `foodflow-enterprise-ultimate` repository slugs.
