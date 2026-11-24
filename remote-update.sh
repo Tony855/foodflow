@@ -85,7 +85,7 @@ if [ "$SKIP_GIT_UPDATE" != "1" ]; then
   STAGE="$(mktemp -d "$SCRIPT_DIR/.foodflow-update.XXXXXX")"
   OLD_NODE_MODULES="$STAGE/node_modules.previous"
   echo "[INFO] 获取目标版本 $GIT_VERSION..."
-  git fetch --no-tags origin "$GIT_VERSION"
+  ff_git_with_optional_token git fetch --no-tags origin "$GIT_VERSION"
   TARGET_SHA="$(git rev-parse FETCH_HEAD)"
   [ -n "$TARGET_SHA" ] || { echo "[ERROR] 无法解析目标提交。" >&2; exit 1; }
   if [ "$TARGET_SHA" = "$OLD_SHA" ]; then
