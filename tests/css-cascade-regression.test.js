@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, '..');
 const commonCss = fs.readFileSync(path.join(root, 'assets/common.css'), 'utf8');
 const cashierCss = fs.readFileSync(path.join(root, 'assets/cashier.css'), 'utf8');
 const kitchenCss = fs.readFileSync(path.join(root, 'assets/kitchen.css'), 'utf8');
+const adminCss = fs.readFileSync(path.join(root, 'assets/admin.css'), 'utf8');
 
 test('shared button defaults are not globally overridden by payment-only styles', () => {
   assert.equal((commonCss.match(/(?:^|\n)\.btn-secondary\s*\{/g) || []).length, 1);
@@ -61,4 +62,26 @@ test('kitchen login layout is defined once without trailing important overrides'
   assert.equal(wrapRules.length, 1);
   assert.equal(boxRules.length, 1);
   assert.doesNotMatch(kitchenCss, /^\s*\.login-(?:wrap|box)\s*\{[^}]*!important/gm);
+});
+
+test('admin list action styles are not redefined after the shared action rules', () => {
+  const selectors = [
+    '#waiterList .actions button.edit-btn',
+    '#storeList .actions button.edit-btn',
+    '#waiterList .actions button.edit-btn:hover',
+    '#storeList .actions button.edit-btn:hover',
+    '#waiterList .actions button.danger',
+    '#storeList .actions button.danger',
+    '#waiterList .actions button.danger:hover',
+    '#storeList .actions button.danger:hover',
+    '#adminList .admin-card .actions button.edit-btn',
+    '#cashierList .admin-card .actions button.edit-btn',
+    '#adminList .admin-card .actions button.danger',
+    '#cashierList .admin-card .actions button.danger'
+  ];
+  for (const selector of selectors) {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const matches = adminCss.match(new RegExp(escaped, 'g')) || [];
+    assert.equal(matches.length, 1, `expected one authoritative selector: ${selector}`);
+  }
 });
