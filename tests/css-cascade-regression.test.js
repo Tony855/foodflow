@@ -8,6 +8,7 @@ const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const commonCss = fs.readFileSync(path.join(root, 'assets/common.css'), 'utf8');
 const cashierCss = fs.readFileSync(path.join(root, 'assets/cashier.css'), 'utf8');
+const kitchenCss = fs.readFileSync(path.join(root, 'assets/kitchen.css'), 'utf8');
 
 test('shared button defaults are not globally overridden by payment-only styles', () => {
   assert.equal((commonCss.match(/(?:^|\n)\.btn-secondary\s*\{/g) || []).length, 1);
@@ -49,4 +50,10 @@ test('ready-to-settle theme has one authoritative rule per state', () => {
   assert.equal((cashierCss.match(/(?:^|\n)\.pos-order-card\.ready-to-settle\s*\{/g) || []).length, 1);
   assert.match(cashierCss, /border-left:\s*4px solid #0ea5e9/);
   assert.doesNotMatch(cashierCss, /border-left:\s*4px solid #2ecc71/);
+});
+
+test('kitchen login layout is defined once without trailing important overrides', () => {
+  assert.equal((kitchenCss.match(/(?:^|\n)\.login-wrap\s*\{/g) || []).length, 1);
+  assert.equal((kitchenCss.match(/(?:^|\n)\.login-box\s*\{/g) || []).length, 1);
+  assert.doesNotMatch(kitchenCss, /\.login-(?:wrap|box)[^{]*\{[^}]*!important/s);
 });
