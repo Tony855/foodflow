@@ -453,4 +453,26 @@ test('enterprise cluster installers clone the canonical FoodFlow repository, not
   }
   const deploymentOverview = read('deploy/README.md');
   assert.doesNotMatch(deploymentOverview, /foodflow-standard|foodflow-enterprise(?:-ultimate)?/);
+  const standardInstaller = read('deploy/standard/deploy.sh');
+  assert.ok(standardInstaller.includes('GIT_REPO="https://github.com/Tony855/foodflow.git"'));
+  assert.doesNotMatch(standardInstaller, /foodflow-enterprise(?:-ultimate)?\.git/);
+});
+
+test('all installer source and bootstrap paths resolve to the canonical FoodFlow repository', () => {
+  const install = read('install.sh');
+  const local = read('install-local.sh');
+  const remoteUpdate = read('remote-update.sh');
+  assert.ok(install.includes('https://github.com/Tony855/foodflow.git'));
+  assert.ok(install.includes('https://github.com/Tony855/foodflow/archive/refs/heads/$BOOTSTRAP_VERSION.tar.gz'));
+  assert.ok(local.includes('https://github.com/Tony855/foodflow.git'));
+  assert.ok(remoteUpdate.includes('git fetch --no-tags origin "$GIT_VERSION"'));
+  for (const file of [
+    'install.sh', 'install-local.sh', 'remote-update.sh',
+    'deploy/standard/deploy.sh',
+    'deploy/enterprise/cluster/deploy.sh',
+    'deploy/enterprise-ultimate/cluster/deploy.sh'
+  ]) {
+    const source = read(file);
+    assert.doesNotMatch(source, /github\.com\/Tony855\/foodflow-(?:standard|enterprise(?:-ultimate)?)\.git/, file + ' must not fetch from a legacy repository');
+  }
 });
