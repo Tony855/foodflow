@@ -429,6 +429,7 @@
     overflow-x: auto !important;
     scrollbar-width: none !important;
     flex-shrink: 0 !important;
+    flex-wrap: nowrap !important;
   }
   .table-filter-tabs::-webkit-scrollbar { display: none; }
   .filter-tab {
@@ -437,10 +438,7 @@
     flex-shrink: 0 !important;
     white-space: nowrap !important;
   }
-  .table-filter-tabs {
-    flex-shrink: 0 !important;
-    flex-wrap: nowrap !important;
-  }
+
 
   /* 卡片内容防溢出 */
   .table-card {
