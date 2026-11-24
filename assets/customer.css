@@ -959,13 +959,6 @@
   font-weight: 600;
 }
 
-/* 下单确认弹窗：菜品行主货币红色 */
-.order-card .order-item .item-price {
-  color: var(--primary-dark, #c94a2a);
-  font-weight: 600;
-}
-
-
 /* FoodFlow customer visual refresh — intentionally scoped to the customer page. */
 .ff-customer {
   --customer-ink: #252b36;
