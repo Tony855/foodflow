@@ -977,7 +977,7 @@ body {
 /* ============================================================
    退款弹窗样式（2026-09-30 追加）
    ============================================================ */
- .refund-input-row {
+.refund-input-row {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1035,9 +1035,6 @@ body {
   border: 1px solid #fed7aa;
 }
 .pos-detail-btns .btn-refund:hover { background: #ffedd5; }
-
-@media (max-width: 768px) {
-}
 
 /* ============================================================
    详情页底部操作栏：永远贴底（2026-09-30）
