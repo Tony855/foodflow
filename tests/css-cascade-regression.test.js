@@ -27,7 +27,7 @@ test('base styles load before page-specific styles', () => {
   const waiterHtml = fs.readFileSync(path.join(root, 'waiter.html'), 'utf8');
   const cashierHtml = fs.readFileSync(path.join(root, 'cashier.html'), 'utf8');
 
-  const hrefs = (html) => [...html.matchAll(/<link\\b[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>/gi)]
+  const hrefs = (html) => [...html.matchAll(/<link\b[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>/gi)]
     .map((match) => match[1]);
 
   const customer = hrefs(customerHtml);
