@@ -132,7 +132,7 @@ git_with_optional_token() {
     cat > "$askpass" <<'ASKPASS'
 #!/bin/sh
 case "$1" in
-  *Username*) printf '%s\\n' "x-access-token" ;;
+  *Username*) printf '%s\n' "x-access-token" ;;
   *) printf '%s' "${FOODFLOW_GITHUB_TOKEN:-}" ;;
 esac
 ASKPASS
@@ -542,7 +542,7 @@ install_single() {
         cd "$DEPLOY_TARGET"
         # 远端必须是 canonical repository；更新失败必须中止，不能伪报成功。
         origin_url="$(git remote get-url origin 2>/dev/null || true)"
-        normalized_origin="$(printf '%s' "$origin_url" | sed -E 's#^(git@github\\.com:|https://github\\.com/)#https://github.com/#; s#\\.git$##; s#/$##')"
+        normalized_origin="$(printf '%s' "$origin_url" | sed -E 's#^(git@github\.com:|https://github\.com/)#https://github.com/#; s#\.git$##; s#/$##')"
         if [ "$normalized_origin" != "https://github.com/Tony855/foodflow" ]; then
             log_error "现有 Git remote origin 不是 Tony855/foodflow，拒绝更新。"
             return 1
