@@ -117,3 +117,11 @@ test('admin list action styles are not redefined after the shared action rules',
     assert.equal(occurrences, 1, `expected one authoritative selector: ${selector}`);
   }
 });
+ 
+test('admin mobile breakpoint removes duplicate 480px rules and base declarations', () => {
+  assert.equal((adminCss.match(/@media \\(max-width: 480px\\)\\s*\\{/g) || []).length, 2);
+  assert.equal((adminCss.match(/\\.menu-thumb img\\s*\\{/g) || []).length, 1);
+  assert.equal((adminCss.match(/\\.menu-info\\s*\\{/g) || []).length, 1);
+  assert.match(adminCss, /\\.tab-group \\{ flex-wrap: wrap; gap: 4px; \\}/);
+  assert.match(adminCss, /\\.menu-actions \\{ width: 100%; justify-content: flex-end; gap: 4px; \\}/);
+});
