@@ -17,6 +17,26 @@ test('customer order item price emphasis has one authoritative rule', () => {
   const authoritativeRule = /\.order-card \.order-item \.item-price\s*\{\s*color:\s*var\(--primary-dark, #c94a2a\);\s*font-weight:\s*600;\s*\}/g;
   assert.equal([...customerCss.matchAll(authoritativeRule)].length, 1, `expected one authoritative color rule for ${selector}`);
 });
+test('customer and superadmin responsive styles avoid redundant overrides', () => {
+  const customerCss = fs.readFileSync(path.join(root, 'assets/customer.css'), 'utf8');
+  const desktopStart = customerCss.indexOf('@media (min-width: 769px)');
+  assert.notEqual(desktopStart, -1);
+  const desktopEnd = customerCss.indexOf('\n    }', desktopStart);
+  assert.notEqual(desktopEnd, -1);
+  const desktopBlock = customerCss.slice(desktopStart, desktopEnd);
+  assert.doesNotMatch(desktopBlock, /\.cats-scroll\s*\{/);
+
+  const superCss = fs.readFileSync(path.join(root, 'assets/super.css'), 'utf8');
+  const responsiveStart = superCss.lastIndexOf('@media (max-width: 768px)');
+  assert.notEqual(responsiveStart, -1);
+  const responsiveEnd = superCss.indexOf('\n}', responsiveStart);
+  assert.notEqual(responsiveEnd, -1);
+  const responsiveBlock = superCss.slice(responsiveStart, responsiveEnd);
+  assert.equal((responsiveBlock.match(/\.form-group\s*\{/g) || []).length, 1);
+  assert.doesNotMatch(responsiveBlock, /\.data-table \.status-badge\s*\{/);
+  assert.match(responsiveBlock, /\.form-group\s*\{\s*margin-bottom:\s*12px;/);
+});
+
 test('shared button defaults are not globally overridden by payment-only styles', () => {
   assert.equal((commonCss.match(/(?:^|\n)\.btn-secondary\s*\{/g) || []).length, 1);
   assert.match(commonCss, /\.payment-actions \.btn-secondary\s*\{/);

@@ -929,7 +929,6 @@
         body { padding-top: 0; }
         .header { position: relative; border-radius: 0; }
         .category-tabs { position: sticky; top: 0; }
-        .cats-scroll { display: contents; }
         .main-content { padding: 16px 24px 100px; }
         .menu-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
     }
