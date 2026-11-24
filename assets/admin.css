@@ -808,10 +808,6 @@
             color: #fff;
             font-size: 12px;
         }
-        .menu-actions button.danger {
-            color: #ff9c9c;
-        }
-
         
         .row {
             display: flex;
