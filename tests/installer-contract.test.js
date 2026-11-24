@@ -474,7 +474,7 @@ test('all installer source and bootstrap paths resolve to the canonical FoodFlow
   assert.ok(install.includes('https://github.com/Tony855/foodflow/archive/refs/heads/$BOOTSTRAP_VERSION.tar.gz'));
   assert.ok(local.includes('https://github.com/Tony855/foodflow.git'));
   assert.ok(install.includes('git_with_optional_token git clone --branch "$GIT_VERSION" https://github.com/Tony855/foodflow.git'));
-  assert.ok(install.includes('git_with_optional_token git fetch --no-tags origin main'));
+  assert.ok(install.includes('git_with_optional_token git fetch --no-tags origin "$GIT_VERSION"'));
   assert.ok(install.includes('ff_require_clean_git_worktree || return 1'));
   assert.ok(!install.includes('https://${GITHUB_TOKEN}@github.com/'), 'GitHub token must never be embedded in a remote URL');
   assert.ok(!install.includes('git pull origin main || log_warn'), 'installer must fail closed when updating an existing checkout');
