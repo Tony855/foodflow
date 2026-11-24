@@ -15,7 +15,7 @@ const superFirstLoginHtml = fs.readFileSync(path.join(root, 'super-first-login.h
 test('super dashboard stylesheet excludes retired standalone login and error modal rules', () => {
   const retiredSelectors = [
     '.login-page', '.login-card', '.login-btn', '.login-error', '.login-lang-select',
-    '.error-modal', '.error-modal-card', '.error-modal-icon', '.error-modal-message', '.error-modal-btn'
+    '.error-modal', '.error-modal-card', '.error-modal-icon', '.error-modal-message', '.error-modal-btn', '.stat-card .unit'
   ];
   for (const selector of retiredSelectors) {
     assert.equal(superCss.includes(selector), false, 'retired selector should not remain: ' + selector);
