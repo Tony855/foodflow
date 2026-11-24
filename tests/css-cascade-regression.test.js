@@ -127,8 +127,8 @@ test('admin mobile breakpoint removes duplicate 480px rules and base declaration
 });
 
 test('admin 1024px responsive rules keep one base block and the distinct tablet navigation block', () => {
-  assert.equal((adminCss.match(/@media \\(max-width: 1024px\\)\\s*\\{/g) || []).length, 2);
-  assert.match(adminCss, /@media \\(max-width: 1024px\\)\\s*\\{[\\s\\S]*?\\.panel\\.module-panel h2::after \\{ display: none; \\}/);
-  assert.match(adminCss, /@media \\(max-width: 1024px\\)\\s*\\{\\s*\\.admin-sidebar \\{\\s*width: 180px !important;/);
+  assert.equal((adminCss.match(/@media \(max-width: 1024px\)\s*\{/g) || []).length, 2);
+  assert.match(adminCss, /@media \(max-width: 1024px\)\s*\{[\s\S]*?\.panel\.module-panel h2::after \{ display: none; \}/);
+  assert.match(adminCss, /@media \(max-width: 1024px\)\s*\{\s*\.admin-sidebar \{\s*width: 180px !important;/);
   assert.match(adminCss, /padding: 11px 12px !important;/);
 });
