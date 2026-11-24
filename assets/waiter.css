@@ -85,7 +85,6 @@
     .order-head button:hover{ background: #c8eac8; }
     .modal{ position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 200; padding: 16px; overscroll-behavior: contain; }
     .modal.open{ display: flex; }
-    html[data-waiter-session] .login-modal.open{ display: none; }
     .modal-card{ background: #fff; border-radius: var(--radius); max-width: 920px; width: 100%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.2); padding: 24px; min-height: 0; overscroll-behavior: contain; }
     .modal-head{ display: flex; justify-content: space-between; align-items: center; padding-bottom: 14px; border-bottom: 1px solid var(--gray-2); flex-shrink: 0; }
     .modal-head h2{ font-size: 20px; font-weight: 700; margin: 0; }
@@ -102,19 +101,6 @@
     .confirm-cancel:hover{ background: #e4e4ec; }
     .confirm-ok{ background: linear-gradient(135deg, #e85d3a, #e84a2a); color: #fff; }
     .confirm-ok:hover{ transform: translateY(-2px); box-shadow: 0 8px 20px rgba(232,93,58,0.3); }
-    .login-modal .modal-card{ max-width: 420px; padding: 32px 28px 28px; background: rgba(255,255,255,0.92); backdrop-filter: blur(12px); border-radius: 28px; border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 30px 80px rgba(0,0,0,0.15); position: relative; z-index: 1; }
-    .login-modal .modal-head{ border-bottom: none; padding-bottom: 8px; }
-    .login-modal .modal-head h2{ font-size: 26px; font-weight: 700; display: flex; align-items: center; gap: 12px; }
-    .login-modal .modal-head h2 .brand-icon{ font-size: 32px; }
-    .login-modal .form-group{ margin-bottom: 14px; }
-    .login-modal .form-group input{ width: 100%; height: 48px; padding: 0 16px; border-radius: var(--radius-sm); border: 1.5px solid var(--gray-3); font-size: 15px; transition: var(--transition); background: rgba(255,255,255,0.8); }
-    .login-modal .form-group input:focus{ outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px rgba(232,74,42,0.12); background: #fff; }
-    .login-modal .form-group label{ display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--gray-5); cursor: pointer; }
-    .login-modal .form-group label input[type="checkbox"]{ width: 18px; height: 18px; accent-color: var(--primary); }
-    .login-btn{ width: 100%; height: 50px; border: 0; border-radius: var(--radius-sm); background: var(--primary); color: #fff; font-size: 18px; font-weight: 700; cursor: pointer; transition: var(--transition); margin-top: 4px; }
-    .login-btn:hover{ background: var(--primary-dark); transform: translateY(-1px); }
-    .login-btn:active{ transform: scale(0.97); }
-    .login-error{ color: var(--primary); margin-top: 10px; font-size: 14px; text-align: center; min-height: 22px; }
     .current-table{ background: var(--primary-bg); border: 1px solid #f5d5c8; color: var(--primary-dark); font-weight: 600; padding: 8px 14px; border-radius: var(--radius-sm); font-size: 15px; flex: 1; }
     .modal-head .current-table{ margin-bottom: 0; background: transparent; border: none; padding: 0; font-size: 18px; font-weight: 700; color: var(--gray-6); }
     .selected-items{ flex-shrink: 0; background: var(--gray-1); border-radius: var(--radius-sm); padding: 12px 14px; max-height: 110px; overflow-y: auto; margin-bottom: 12px; scrollbar-width: none; -ms-overflow-style: none; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
@@ -174,7 +160,6 @@
       header .header-btn{ padding: 4px 10px !important; font-size: 12px !important; }
       header .icon-btn{ width: 30px !important; height: 30px !important; min-width: 30px !important; font-size: 14px !important; }
       header .waiter-name, header .store-name{ padding: 3px 10px !important; font-size: 12px !important; }
-      .login-modal .modal-card{ padding: 24px 18px 20px; }
       .dish-list{ grid-template-columns: 1fr; }
       .table-grid{ grid-template-columns: 1fr; }
     }
@@ -349,7 +334,6 @@
   white-space: nowrap;
 }
 
-
 .order-amount {
   font-weight: 700;
   color: var(--primary);
@@ -438,7 +422,6 @@
     flex-shrink: 0 !important;
     white-space: nowrap !important;
   }
-
 
   /* 卡片内容防溢出 */
   .table-card {
@@ -610,8 +593,6 @@
   backdrop-filter: blur(4px);
 }
 .modal-overlay.show { display: flex; }
-
-
 
 @media (max-width: 600px) {
   .payment-methods { grid-template-columns: repeat(2, 1fr); }
