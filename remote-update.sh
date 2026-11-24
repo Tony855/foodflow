@@ -69,7 +69,8 @@ trap rollback_update EXIT
 if [ "$SKIP_GIT_UPDATE" != "1" ]; then
   [ -d .git ] || { echo "[ERROR] 当前目录不是 Git 仓库: $SCRIPT_DIR" >&2; exit 1; }
   # Never update a checkout whose origin points outside the canonical project.
-  local origin_url normalized_origin
+  origin_url=""
+  normalized_origin=""
   origin_url="$(git remote get-url origin 2>/dev/null)" || {
     echo "[ERROR] Git origin 缺失，拒绝执行远程更新。" >&2
     exit 1
