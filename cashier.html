@@ -196,7 +196,7 @@
     <button class="modal-close" onclick="closeKhqrModal()">✕</button>
     <h2 class="payment-title">💳 <span data-i18n="khqrTitle">扫码收款</span></h2>
 
-    <div class="payment-amount" style="padding:8px 0 16px;">
+    <div class="payment-amount">
       <div class="payment-amount-value" id="khqrAmount">$0.00</div>
     </div>
 
@@ -216,11 +216,11 @@
       <span id="khqrCountdown" style="font-family:'SF Mono',monospace;font-weight:700;color:#e85d3a;font-size:16px;">10:00</span>
     </div>
 
-    <div id="khqrStatusBar" style="margin-top:14px;padding:10px 14px;border-radius:10px;background:#f0f4ff;color:#5a6acf;font-size:13px;">
+    <div id="khqrStatusBar" style="padding:10px 14px;border-radius:10px;background:#f0f4ff;color:#5a6acf;font-size:13px;">
       <span data-i18n="khqrWaiting">等待客户扫码付款...</span>
     </div>
 
-    <div class="payment-actions" style="margin-top:18px;">
+    <div class="payment-actions">
       <button class="btn btn-secondary" onclick="closeKhqrModal()" data-i18n="cancel">取消</button>
       <button class="btn btn-primary" id="khqrConfirmBtn" onclick="confirmKhqrReceived()" data-i18n="khqrReceived">✅ 已收到款</button>
     </div>
