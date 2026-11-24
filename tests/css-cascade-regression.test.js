@@ -132,3 +132,19 @@ test('admin 1024px responsive rules keep one base block and the distinct tablet 
   assert.match(adminCss, /@media \(max-width: 1024px\)\s*\{\s*\.admin-sidebar \{\s*width: 180px !important;/);
   assert.match(adminCss, /padding: 11px 12px !important;/);
 });
+
+test('cashier payment logo and refund focus styles each have one authoritative rule', () => {
+  assert.equal((cashierCss.match(/^\.pos-tag\.pay-method img\s*\{/gm) || []).length, 1);
+  const paymentLogoRule = cashierCss.match(/\.pos-tag\.pay-method img\s*\{([^}]*)\}/);
+  assert.ok(paymentLogoRule);
+  assert.match(paymentLogoRule[1], /display:\s*inline-block/);
+  assert.match(paymentLogoRule[1], /vertical-align:\s*middle/);
+  assert.match(paymentLogoRule[1], /flex-shrink:\s*0/);
+
+  assert.equal((cashierCss.match(/^\.refund-input:focus\s*\{/gm) || []).length, 1);
+  const refundFocusRule = cashierCss.match(/\.refund-input:focus\s*\{([^}]*)\}/);
+  assert.ok(refundFocusRule);
+  assert.match(refundFocusRule[1], /border-color:\s*#ff7a3d/);
+  assert.match(refundFocusRule[1], /rgba\(255,122,61,0\.12\)/);
+  assert.doesNotMatch(refundFocusRule[1], /102,126,234/);
+});
