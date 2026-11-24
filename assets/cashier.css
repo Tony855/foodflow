@@ -977,49 +977,13 @@ body {
 /* ============================================================
    退款弹窗样式（2026-09-30 追加）
    ============================================================ */
-.refund-card {
-  position: relative;
-  background: #fff;
-  border-radius: 20px;
-  width: 100%;
-  max-width: 460px;
-  padding: 24px;
-  box-shadow: var(--pos-shadow-lg);
-  animation: paymentIn 0.25s ease;
-}
-.refund-title {
-  font-size: 18px;
-  font-weight: 800;
-  color: var(--pos-text);
-  margin-bottom: 16px;
-  text-align: center;
-}
-.refund-amount {
-  text-align: center;
-  padding: 12px 0 16px;
-  border-bottom: 1px solid var(--pos-border);
-  margin-bottom: 18px;
-}
-.refund-amount-label {
-  font-size: 13px;
-  color: var(--pos-text-dim);
-  margin-bottom: 4px;
-}
-.refund-amount-value {
-  font-size: 30px;
-  font-weight: 800;
-  color: var(--pos-danger);
-}
-.refund-input-row,
-.refund-reason-row {
+ .refund-input-row {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 14px;
 }
-.refund-reason-row { align-items: flex-start; }
-.refund-input-row label,
-.refund-reason-row label {
+.refund-input-row label {
   font-size: 14px;
   font-weight: 600;
   color: var(--pos-text-dim);
@@ -1056,20 +1020,6 @@ body {
   border-color: var(--pos-primary);
   box-shadow: 0 0 0 3px rgba(102,126,234,0.12);
 }
-.refund-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 18px;
-}
-.refund-actions .btn {
-  flex: 1;
-  height: 48px;
-  border-radius: var(--pos-radius-sm);
-  font-size: 15px;
-  font-weight: 700;
-  border: 0;
-  cursor: pointer;
-}
 .btn-danger {
   background: linear-gradient(135deg, #ff6b6b, #dc2626);
   color: #fff;
@@ -1087,9 +1037,6 @@ body {
 .pos-detail-btns .btn-refund:hover { background: #ffedd5; }
 
 @media (max-width: 768px) {
-  .refund-card { padding: 18px; max-width: calc(100vw - 24px); }
-  .refund-amount-value { font-size: 26px; }
-  .refund-actions .btn { height: 46px; }
 }
 
 /* ============================================================
