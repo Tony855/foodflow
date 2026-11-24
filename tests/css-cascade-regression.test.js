@@ -11,6 +11,14 @@ const cashierCss = fs.readFileSync(path.join(root, 'assets/cashier.css'), 'utf8'
 const kitchenCss = fs.readFileSync(path.join(root, 'assets/kitchen.css'), 'utf8');
 const adminCss = fs.readFileSync(path.join(root, 'assets/admin.css'), 'utf8');
 
+test('customer order item price emphasis has one authoritative rule', () => {
+  const customerCss = fs.readFileSync(path.join(root, 'assets/customer.css'), 'utf8');
+  const selector = '.order-card .order-item .item-price';
+  const rules = customerCss.match(/(?:^|\\n)\\s*\\.order-card \\.order-item \\.item-price\\s*\\{/g) || [];
+  assert.equal(rules.length, 1, `expected one authoritative rule for ${selector}`);
+  assert.match(customerCss, /\\.order-card \\.order-item \\.item-price\\s*\\{\\s*color:\\s*var\\(--primary-dark, #c94a2a\\);\\s*font-weight:\\s*600;/);
+});
+
 test('shared button defaults are not globally overridden by payment-only styles', () => {
   assert.equal((commonCss.match(/(?:^|\n)\.btn-secondary\s*\{/g) || []).length, 1);
   assert.match(commonCss, /\.payment-actions \.btn-secondary\s*\{/);
