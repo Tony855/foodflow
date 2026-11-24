@@ -499,3 +499,42 @@
 2. 管理员启用 main branch protection / rulesets，要求 PR 与全部关键 CI、安全、数据库和安装兼容检查；禁止 force-push 与删除，并在启用后读取验证。
 3. 继续为顾客下单 → KDS → 收银 → 退款补充浏览器端到端验收，以及跨租户对象级授权测试。
 4. 真实支付方 sandbox、财务账户映射与签字、Telegram 多商户 staging、生产备份恢复/RPO/RTO、多节点故障注入仍需真实环境和授权，不能由静态测试代替。
+
+
+### 15.3 PR #17 合并后的 main 完整复核（2026-11-24 03:32 UTC）
+
+本节记录 PR #17 合并后 main SHA `3d6635d96071f4658a26c1f837140782c3383dde` 的同一提交验证结果。PR #17 仅调整 `.github/workflows/daily-security-audit.yml` 的依赖/回归任务条件，将 `push` 事件纳入执行范围；没有修改应用业务逻辑、数据库 schema 或生产凭据。
+
+#### PR #17 与 main 工作流
+
+- PR #17（`ci: run dependency regression audit on main pushes`）head `e01d616ada072c91ee1831fa81b1e79eff1717d2` 的 CI、Installer Compatibility、Daily Security and Quality Audit 全部 success；MariaDB/MySQL 矩阵、五种安装系统、Dependencies and regression suite、CodeQL 均完成。
+- PR #17 于 2026-11-24 03:27:45 UTC squash merge；merge commit/main HEAD：`3d6635d96071f4658a26c1f837140782c3383dde`。
+- main push CI [45319678261](https://github.com/Tony855/foodflow/actions/runs/45319678261)：validate、MySQL、MariaDB 10.11/11.4/11.8/12.3 全部 success。
+- main push Installer Compatibility [45319678264](https://github.com/Tony855/foodflow/actions/runs/45319678264)：Debian 12/13、Ubuntu 22.04/24.04/26.04 全部 success。
+- main push Daily Security and Quality Audit [45319678342](https://github.com/Tony855/foodflow/actions/runs/45319678342)：Dependencies and regression suite success；CodeQL success。**修复后 push 事件不再跳过完整依赖/回归任务。**
+- 三个 main push workflows 均以同一 SHA `3d6635d...` 运行并最终 completed/success；无跨 SHA 结果混用。
+
+#### 依赖、测试和静态安全扫描
+
+- main push validate 日志：783 pass、0 fail、26 skipped。26 项是未在通用 validate job 中配置 `MYSQL_INTEGRATION_URL` 的独立数据库测试；不能把 skipped 计为通过。
+- main push 的完整依赖/回归 job：`npm audit --audit-level=moderate` 与 `npm audit --omit=dev --audit-level=high` 均输出 `found 0 vulnerabilities`；回归日志显示 783 pass、26 skipped。
+- MariaDB 11.4 和 12.3 集成任务日志分别显示主 Node 测试 782 pass、27 skipped，随后 finance integration 23 pass、0 skipped；其他迁移/集成子任务各有独立成功记录。不同 job 因环境变量配置不同而有不同 skipped 数，不能合并成一个未经核实的总测试数。
+- CodeQL 成功扫描本次调用范围内 305/305 个 JavaScript 文件及 11/11 个 HTML 文件。CodeQL job success 不等于所有 GitHub code-scanning / Dependabot alerts 为零；当前仍未取得独立 alerts 清单。
+- validate 与数据库日志中的 Redis 默认配置提示属于测试容器环境信息；对应 jobs 成功，不作为应用失败报告。
+
+#### 仓库治理与开放工作
+
+- 当前开放 PR：0；当前开放 Issue：0（合并后 API 复核）。
+- Rulesets API 返回空列表；main branch protection endpoint 返回 403 `Resource not accessible by integration`。当前连接无法读取 branch protection 管理接口，不能证明 required checks 或保护规则已启用。
+- **高优先级治理风险仍待管理员处理**：在 GitHub Settings → Rules → Rulesets 为 main 配置 PR required、required status checks（validate、MySQL、MariaDB 10.11/11.4/11.8/12.3、Dependencies and regression suite、CodeQL、Debian 12/13、Ubuntu 22.04/24.04/26.04），禁止 force-push 与删除；设置后需重新读取验证。
+- 生产验收仍未闭环：支付方 sandbox/商户凭据及官方协议、生产支付 callback ingress/verified-event processor、自动退款 callback、自动订单结算与总账过账、财务账户映射及签字、Telegram 多商户 staging、生产备份恢复与 RPO/RTO、多节点 Redis/Socket.IO 故障注入、真实门店设备/打印机和完整浏览器下单→KDS→收银→退款 E2E、跨租户/跨门店对象授权攻击测试。
+- 静态审计候选（157 疑似未使用 i18n key、90 疑似未使用 CSS class、6 疑似未使用 window export、174 动态拼接候选）尚未逐项人工分类；不得仅凭启发式批量删除。
+- 本轮只在 GitHub Actions 测试环境执行验证；未访问生产数据库、客户数据或支付凭据，未执行生产支付/退款/迁移。
+
+#### 下一批行动
+
+1. 追加并验证浏览器端到端订单旅程及跨租户/门店对象授权攻击测试。
+2. 在真实支付方 sandbox 与财务审批到位后，闭环支付回调、退款和总账过账。
+3. 完成 Telegram 多商户 staging、生产备份恢复演练/RPO/RTO 和 Redis 多节点故障注入。
+4. 由仓库管理员启用 main branch protection / rulesets，并验证 required checks 生效。
+5. 人工分类静态审计候选，不按启发式结果直接删除。
