@@ -90,7 +90,14 @@ if [ "$SKIP_GIT_UPDATE" != "1" ]; then
     echo "[ERROR] Git origin 不是 canonical FoodFlow 仓库，拒绝更新。" >&2
     exit 1
   }
-  ff_require_clean_git_worktree
+  # 强制覆盖模式：允许工作区存在本地修改；后续 git reset --hard
+  # 将所有已跟踪应用代码切换到远端目标提交。生产 .env/上传/备份/日志
+  # 不属于 Git 跟踪内容，不会被 reset 删除。
+  if [ "${FF_FORCE_OVERWRITE:-0}" != "1" ]; then
+    ff_require_clean_git_worktree
+  else
+    echo "[WARN] 强制覆盖模式：本地已跟踪代码修改将被远端目标提交覆盖。"
+  fi
   OLD_SHA="$(git rev-parse HEAD)"
   STAGE="$(mktemp -d "$SCRIPT_DIR/.foodflow-update.XXXXXX")"
   OLD_NODE_MODULES="$STAGE/node_modules.previous"
