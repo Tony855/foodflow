@@ -453,9 +453,17 @@ test('enterprise cluster installers clone the canonical FoodFlow repository, not
   }
   const deploymentOverview = read('deploy/README.md');
   assert.doesNotMatch(deploymentOverview, /foodflow-standard|foodflow-enterprise(?:-ultimate)?/);
-  const standardInstaller = read('deploy/standard/deploy.sh');
-  assert.ok(standardInstaller.includes('GIT_REPO="https://github.com/Tony855/foodflow.git"'));
-  assert.doesNotMatch(standardInstaller, /foodflow-enterprise(?:-ultimate)?\.git/);
+  for (const file of [
+    'deploy/standard/deploy.sh',
+    'deploy/enterprise/cluster/deploy.sh',
+    'deploy/enterprise-ultimate/cluster/deploy.sh'
+  ]) {
+    const source = read(file);
+    assert.ok(source.includes('https://github.com/Tony855/foodflow.git'), file + ' must use canonical source');
+    assert.ok(source.includes('https://github.com/Tony855/foodflow'), file + ' must validate canonical origin before updating');
+    assert.ok(source.includes('ff_require_clean_git_worktree'), file + ' must reject dirty worktrees');
+    assert.doesNotMatch(source, /foodflow-enterprise(?:-ultimate)?\.git/, file + ' must not use a legacy repository');
+  }
 });
 
 test('all installer source and bootstrap paths resolve to the canonical FoodFlow repository', () => {
