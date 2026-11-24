@@ -80,7 +80,13 @@ test('admin list action styles are not redefined after the shared action rules',
     '#cashierList .admin-card .actions button.danger'
   ];
   for (const selector of selectors) {
-    const occurrences = adminCss.split(selector).length - 1;
+    let occurrences = 0;
+    let offset = 0;
+    while ((offset = adminCss.indexOf(selector, offset)) !== -1) {
+      const next = adminCss[offset + selector.length] || '';
+      if (next !== ':') occurrences += 1;
+      offset += selector.length;
+    }
     assert.equal(occurrences, 1, `expected one authoritative selector: ${selector}`);
   }
 });
