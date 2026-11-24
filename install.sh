@@ -127,82 +127,45 @@ git_with_optional_token() {
 
 # ===== 已安装时的更新模式 =====
 update_existing_install() {
-    log_step "检测到已安装，先获取目标版本的事务式升级器"
+    log_step "检测到已安装，启用强制覆盖升级模式"
     local target="$APP_DIR"
-    local updater_tmp safety_tmp
+    local updater_tmp safety_tmp origin_url normalized_origin
     prepare_deploy_key 2>/dev/null || { log_error "无法准备 deploy key，更新中止"; return 1; }
-    # Fresh installs deploy source files with rsync --exclude .git, so the
-    # production directory is intentionally not a Git checkout. When the
-    # installer itself is running from a clean repository checkout (for
-    # example /opt/shaolafang), safely attach that checkout's Git metadata
-    # to the deployed tree before invoking the transactional updater.
-    if ! git -C "$target" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        if [ "$SCRIPT_DIR" = "$target" ] || [ ! -d "$SCRIPT_DIR/.git" ]; then
-            log_error "生产目录不是 Git 仓库，且安装器目录没有可用的 Git 元数据；拒绝自动更新。"
-            return 1
-        fi
-        if ! git -C "$SCRIPT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-            log_error "安装器源码目录不是有效 Git 仓库；拒绝迁移。"
-            return 1
-        fi
-        # A previous manual clone may leave a nested checkout at
-        # /opt/shaolafang/shaolafang. Ignore only this exact path, and only
-        # when it is clean, points to the same GitHub repository, and its
-        # commit is an ancestor of the authoritative outer checkout.
-        local nested_checkout="$SCRIPT_DIR/shaolafang"
-        local source_status
-        source_status="$(git -C "$SCRIPT_DIR" status --porcelain --untracked-files=normal -- . ':(exclude)shaolafang')"
-        if [ -d "$nested_checkout/.git" ] &&
-           git -C "$nested_checkout" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-            local nested_head nested_status source_head outer_remote nested_remote
-            source_head="$(git -C "$SCRIPT_DIR" rev-parse HEAD)"
-            nested_head="$(git -C "$nested_checkout" rev-parse HEAD 2>/dev/null)"
-            nested_status="$(git -C "$nested_checkout" status --porcelain --untracked-files=normal 2>/dev/null)"
-            outer_remote="$(git -C "$SCRIPT_DIR" remote get-url origin 2>/dev/null || true)"
-            nested_remote="$(git -C "$nested_checkout" remote get-url origin 2>/dev/null || true)"
-            outer_remote="$(printf '%s' "$outer_remote" | sed -E 's#^(git@github\.com:|https://github\.com/)#https://github.com/#; s#\.git$##; s#/$##')"
-            nested_remote="$(printf '%s' "$nested_remote" | sed -E 's#^(git@github\.com:|https://github\.com/)#https://github.com/#; s#\.git$##; s#/$##')"
-            if [ -n "$source_status" ] || [ -n "$nested_status" ] ||
-               [ -z "$outer_remote" ] || [ "$nested_remote" != "$outer_remote" ] ||
-               ! git -C "$SCRIPT_DIR" merge-base --is-ancestor "$nested_head" "$source_head"; then
-                log_error "源码目录存在修改，或嵌套仓库不是同一远端项目的干净历史副本；拒绝迁移 Git 元数据。"
-                git -C "$SCRIPT_DIR" status --short
-                git -C "$nested_checkout" status --short 2>/dev/null || true
-                return 1
-            fi
-            log_warn "检测到同一远端项目的干净嵌套仓库历史副本；已验证提交关系，可继续执行源码完整性检查。"
-        elif [ -n "$(git -C "$SCRIPT_DIR" status --porcelain --untracked-files=normal)" ]; then
-            log_error "安装器源码仓库存在未提交或未跟踪文件；拒绝将其 Git 元数据迁移到生产目录。"
-            git -C "$SCRIPT_DIR" status --short
-            return 1
-        fi
-        if [ -e "$target/.git" ]; then
-            log_error "生产目录存在非标准 .git 路径；拒绝覆盖。"
-            return 1
-        fi
 
-        log_info "检测到源码仓库与生产目录分离；验证生产文件后迁移 Git 元数据..."
-        if ! cp -a "$SCRIPT_DIR/.git" "$target/.git"; then
-            rm -rf "$target/.git"
-            log_error "复制 Git 元数据失败；未执行生产更新。"
-            return 1
-        fi
-        if ! git -C "$target" rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
-           [ "$(git -C "$target" rev-parse HEAD 2>/dev/null)" != "$(git -C "$SCRIPT_DIR" rev-parse HEAD 2>/dev/null)" ] ||
-           [ -n "$(git -C "$target" status --porcelain --untracked-files=normal 2>/dev/null)" ] ||
-           ! git -C "$target" remote get-url origin >/dev/null 2>&1; then
-            git -C "$target" status --short 2>/dev/null || true
-            rm -rf "$target/.git"
-            log_error "生产目录文件与源码仓库提交不一致，或 Git 远端配置无效；已撤销元数据迁移并拒绝覆盖。"
-            return 1
-        fi
-        log_success "生产目录与源码提交一致，Git 元数据迁移完成。"
-    fi
-    if [ -n "$(git -C "$target" status --porcelain --untracked-files=normal)" ]; then
-        log_error "目标目录存在未提交或未跟踪文件，拒绝覆盖。"
-        git -C "$target" status --short
+    # 生产目录首次升级时可能没有 .git（安装时默认排除 Git 元数据）。
+    # 只验证源码仓库身份，不要求源码工作区干净，也不要求生产文件与源码 HEAD 一致；
+    # 后续由远端目标提交执行 git reset --hard，覆盖所有已跟踪代码修改。
+    if ! git -C "$SCRIPT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        log_error "安装器源码目录不是有效 Git 仓库，无法确定可信更新来源。"
         return 1
     fi
+    origin_url="$(git -C "$SCRIPT_DIR" remote get-url origin 2>/dev/null || true)"
+    normalized_origin="$(printf '%s' "$origin_url" | sed -E 's#^(git@github\.com:|ssh://git@github\.com/|https://github\.com/)#https://github.com/#; s#\.git$##; s#/$##')"
+    if [ "$normalized_origin" != "https://github.com/Tony855/foodflow" ]; then
+        log_error "安装器源码仓库不是 canonical FoodFlow 远端，拒绝部署。"
+        return 1
+    fi
+
+    if ! git -C "$target" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        if [ -e "$target/.git" ]; then
+            log_error "生产目录存在非标准 .git 路径；拒绝迁移元数据。"
+            return 1
+        fi
+        log_info "将已验证的 FoodFlow Git 元数据接入生产目录（不检查生产代码差异）..."
+        if ! cp -a "$SCRIPT_DIR/.git" "$target/.git"; then
+            rm -rf "$target/.git"
+            log_error "复制 Git 元数据失败。"
+            return 1
+        fi
+    fi
+
+    origin_url="$(git -C "$target" remote get-url origin 2>/dev/null || true)"
+    normalized_origin="$(printf '%s' "$origin_url" | sed -E 's#^(git@github\.com:|ssh://git@github\.com/|https://github\.com/)#https://github.com/#; s#\.git$##; s#/$##')"
+    if [ "$normalized_origin" != "https://github.com/Tony855/foodflow" ]; then
+        log_error "生产目录 Git origin 不是 canonical FoodFlow 仓库，拒绝更新。"
+        return 1
+    fi
+
     ff_git_with_optional_token git -C "$target" fetch --no-tags origin "$GIT_VERSION" || { log_error "获取 $GIT_VERSION 失败"; return 1; }
     updater_tmp="$(mktemp /tmp/foodflow-remote-update.XXXXXX)"
     safety_tmp="$(mktemp /tmp/foodflow-deploy-safety.XXXXXX)"
@@ -217,7 +180,7 @@ update_existing_install() {
         return 1
     fi
     chmod 0700 "$updater_tmp"
-    if FF_APP_DIR="$target" FF_DEPLOY_SAFETY_LIB="$safety_tmp" FF_DEPLOY_LOCK_HELD=1 GIT_VERSION="$GIT_VERSION" bash "$updater_tmp"; then
+    if FF_APP_DIR="$target" FF_DEPLOY_SAFETY_LIB="$safety_tmp" FF_FORCE_OVERWRITE=1 FF_DEPLOY_LOCK_HELD=1 GIT_VERSION="$GIT_VERSION" bash "$updater_tmp"; then
         rm -f "$updater_tmp" "$safety_tmp"
         return 0
     else
