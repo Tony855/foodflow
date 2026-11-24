@@ -41,3 +41,12 @@ test('base styles load before page-specific styles', () => {
   assert.ok(cashier.indexOf('assets/common.css?v=1791356376') < cashier.indexOf('assets/khqr-shared.css?v=1'));
   assert.ok(cashier.indexOf('assets/khqr-shared.css?v=1') < cashier.indexOf('assets/cashier.css?v=1791407775'));
 });
+
+test('ready-to-settle theme has one authoritative rule per state', () => {
+  assert.equal((cashierCss.match(/(?:^|\\n)\\.pos-order-card\\.status-pending\\.ready-to-settle\\s*\\{/g) || []).length, 1);
+  assert.equal((cashierCss.match(/(?:^|\\n)\\.pos-order-card\\.status-pending\\.ready-to-settle:hover\\s*\\{/g) || []).length, 1);
+  assert.equal((cashierCss.match(/(?:^|\\n)\\.pos-card-ready-tip\\s*\\{/g) || []).length, 1);
+  assert.equal((cashierCss.match(/(?:^|\\n)\\.pos-order-card\\.ready-to-settle\\s*\\{/g) || []).length, 1);
+  assert.match(cashierCss, /border-left:\\s*4px solid #0ea5e9/);
+  assert.doesNotMatch(cashierCss, /border-left:\\s*4px solid #2ecc71/);
+});
