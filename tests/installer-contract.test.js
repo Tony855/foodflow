@@ -487,6 +487,7 @@ test('all installer source and bootstrap paths resolve to the canonical FoodFlow
   assert.match(safety, /ff_git_with_optional_token\(\)/);
   assert.match(safety, /trap 'rm -f -- "\$askpass"' EXIT/);
   assert.match(safety, /GIT_TERMINAL_PROMPT=0/);
+  assert.match(safety, /printf '%s\\n' "x-access-token"/);
   assert.match(remoteUpdate, /ff_git_with_optional_token git fetch --no-tags origin "\$GIT_VERSION"/);
   assert.match(install, /ff_git_with_optional_token git -C "\$target" fetch --no-tags origin "\$GIT_VERSION"/);
   for (const file of [
