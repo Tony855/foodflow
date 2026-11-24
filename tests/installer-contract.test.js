@@ -479,6 +479,10 @@ test('all installer source and bootstrap paths resolve to the canonical FoodFlow
   assert.ok(!install.includes('https://${GITHUB_TOKEN}@github.com/'), 'GitHub token must never be embedded in a remote URL');
   assert.ok(!install.includes('git pull origin main || log_warn'), 'installer must fail closed when updating an existing checkout');
   assert.ok(remoteUpdate.includes('git fetch --no-tags origin "$GIT_VERSION"'));
+  assert.match(remoteUpdate, /git remote get-url origin/);
+  assert.match(remoteUpdate, /https:\/\/github\.com\/Tony855\/foodflow/);
+  assert.match(remoteUpdate, /canonical FoodFlow 仓库，拒绝更新/);
+  assert.ok(remoteUpdate.indexOf('git remote get-url origin') < remoteUpdate.indexOf('git fetch --no-tags origin'));
   for (const file of [
     'install.sh', 'install-local.sh', 'remote-update.sh',
     'deploy/standard/deploy.sh',
