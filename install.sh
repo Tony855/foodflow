@@ -119,6 +119,30 @@ prepare_deploy_key() {
     export GIT_SSH_COMMAND="ssh -i $FOODFLOW_DEPLOY_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
 }
 
+# Use a short-lived askpass helper for private-repository tokens. Never place
+# credentials in a remote URL, command-line argument, or persistent git config.
+git_with_optional_token() {
+    if [ -z "${GITHUB_TOKEN:-}" ]; then
+        "$@"
+        return $?
+    fi
+
+    local askpass rc
+    askpass="$(mktemp /tmp/foodflow-git-askpass.XXXXXX)" || return 1
+    cat > "$askpass" <<'ASKPASS'
+#!/bin/sh
+case "$1" in
+  *Username*) printf '%s\\n' "x-access-token" ;;
+  *) printf '%s' "${FOODFLOW_GITHUB_TOKEN:-}" ;;
+esac
+ASKPASS
+    chmod 0700 "$askpass"
+    FOODFLOW_GITHUB_TOKEN="$GITHUB_TOKEN" GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0 "$@"
+    rc=$?
+    rm -f "$askpass"
+    return "$rc"
+}
+
 # ===== 已安装时的更新模式 =====
 update_existing_install() {
     log_step "检测到已安装，先获取目标版本的事务式升级器"
@@ -516,13 +540,17 @@ install_single() {
         log_info "检测到已部署，执行 git pull 更新..."
         prepare_deploy_key 2>/dev/null || true
         cd "$DEPLOY_TARGET"
-        # 如果有 GITHUB_TOKEN，用带 token 的地址 pull
-        if [ -n "$GITHUB_TOKEN" ]; then
-            git pull "https://${GITHUB_TOKEN}@github.com/Tony855/foodflow.git" main || log_warn "git pull 失败，继续使用现有代码"
-        else
-            git pull origin main || log_warn "git pull 失败，继续使用现有代码"
+        # 远端必须是 canonical repository；更新失败必须中止，不能伪报成功。
+        origin_url="$(git remote get-url origin 2>/dev/null || true)"
+        normalized_origin="$(printf '%s' "$origin_url" | sed -E 's#^(git@github\\.com:|https://github\\.com/)#https://github.com/#; s#\\.git$##; s#/$##')"
+        if [ "$normalized_origin" != "https://github.com/Tony855/foodflow" ]; then
+            log_error "现有 Git remote origin 不是 Tony855/foodflow，拒绝更新。"
+            return 1
         fi
-        log_success "代码更新完成"
+        ff_require_clean_git_worktree || return 1
+        git_with_optional_token git fetch --no-tags origin main || { log_error "获取 canonical repository main 分支失败"; return 1; }
+        git merge --ff-only FETCH_HEAD || { log_error "无法快进更新到 canonical repository main；请检查本地提交"; return 1; }
+        log_success "代码快进更新完成"
     elif [ -f "$SCRIPT_DIR/server.js" ]; then
         # 当前目录有代码（但不是 git）：直接复制
         log_info "复制代码到 $DEPLOY_TARGET..."
@@ -552,11 +580,7 @@ install_single() {
             git clone --branch "$GIT_VERSION" "$FOODFLOW_REPO" "$DEPLOY_TARGET"
         elif [ -n "$GITHUB_TOKEN" ]; then
             log_info "使用 HTTPS + GITHUB_TOKEN 方式克隆..."
-            git clone --branch "$GIT_VERSION" "https://${GITHUB_TOKEN}@github.com/Tony855/foodflow.git" "$DEPLOY_TARGET"
-            # 克隆完立刻剥离 token，防止写入 .git/config
-            cd "$DEPLOY_TARGET"
-            git remote set-url origin https://github.com/Tony855/foodflow.git
-            git config --unset credential.helper 2>/dev/null || true
+            git_with_optional_token git clone --branch "$GIT_VERSION" https://github.com/Tony855/foodflow.git "$DEPLOY_TARGET"
         else
             log_info "使用 HTTPS 方式克隆（需要输入用户名密码）..."
             git clone --branch "$GIT_VERSION" https://github.com/Tony855/foodflow.git "$DEPLOY_TARGET"
