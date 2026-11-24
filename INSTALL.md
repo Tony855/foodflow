@@ -818,3 +818,23 @@ mysql -u root -p ordering_system < backup.sql
 
 **相关**：MariaDB 严格检测（二进制 + systemd unit）、域名环境变量化，
 见 commit `12fec82`。
+
+
+## Repository source and installer download paths
+
+All installation modes in this repository use the same canonical source repository:
+
+- Git: `https://github.com/Tony855/foodflow.git`
+- Archive/bootstrap: `https://github.com/Tony855/foodflow/archive/refs/heads/main.tar.gz` (the installer constructs the archive URL from the selected branch/tag).
+- Raw single-file bootstrap entry: the `install.sh` from this repository; if its shared helper files are absent, it downloads the full archive from the same canonical repository and restarts from the extracted tree.
+- Standard, Enterprise and Enterprise Ultimate are deployment modes/configuration paths within this repository—not separate `foodflow-standard`, `foodflow-enterprise` or `foodflow-enterprise-ultimate` source repositories.
+
+For a manual checkout, use:
+
+```bash
+git clone https://github.com/Tony855/foodflow.git
+cd foodflow
+sudo bash install.sh
+```
+
+The Enterprise and Enterprise Ultimate cluster deploy scripts must clone the canonical repository when the deployment directory is absent. Existing installations are updated only after their worktree checks pass; do not substitute a legacy repository URL.
