@@ -148,3 +148,17 @@ test('cashier payment logo and refund focus styles each have one authoritative r
   assert.match(refundFocusRule[1], /rgba\(255,122,61,0\.12\)/);
   assert.doesNotMatch(refundFocusRule[1], /102,126,234/);
 });
+
+test('waiter mobile filter tabs have one consolidated responsive rule', () => {
+  const waiterCss = fs.readFileSync(path.join(root, 'assets/waiter.css'), 'utf8');
+  assert.equal((waiterCss.match(/^\s*\.table-filter-tabs\s*\{/gm) || []).length, 2);
+  const mobileStart = waiterCss.indexOf('@media (max-width: 640px)');
+  assert.notEqual(mobileStart, -1);
+  const mobileRuleStart = waiterCss.indexOf('.table-filter-tabs {', mobileStart);
+  assert.notEqual(mobileRuleStart, -1);
+  const mobileRuleEnd = waiterCss.indexOf('}', mobileRuleStart);
+  const mobileRule = waiterCss.slice(mobileRuleStart, mobileRuleEnd);
+  assert.match(mobileRule, /flex-shrink:\s*0 !important/);
+  assert.match(mobileRule, /flex-wrap:\s*nowrap !important/);
+  assert.match(mobileRule, /overflow-x:\s*auto !important/);
+});
