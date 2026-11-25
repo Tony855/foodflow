@@ -612,3 +612,13 @@
 - Installer Compatibility run `45526485361`：Debian 12、Debian 13、Ubuntu 22.04、Ubuntu 24.04、Ubuntu 26.04 全部 success。
 - Main CI run `45526485340`：validate、MySQL integration、MariaDB 11.8、12.3 已 success；MariaDB 10.11 与 11.4 仍 in progress。CI 数据库矩阵尚未全完成。
 - 因此 main 同 SHA 的完整 CI（包括 MariaDB 10.11/11.4）仍待完成；不可提前宣告全部 post-merge CI 成功。
+
+
+#### 16.3 PR #41 合并后 main 全部 CI / 数据库矩阵完成（2026-11-25 08:36）
+
+- main CI run `45526485340` 同 SHA `0e806d9ecfb6d453330ce74dd4de43e49fd0fd03` 的全部 jobs 已 success：validate、MySQL integration、MariaDB 10.11/11.4/11.8/12.3。
+- validate：831 tests、805 pass、0 fail、26 skipped；生产依赖审计 `found 0 vulnerabilities`。26 项 skipped 的通用 job 缺少 MySQL integration URL，数据库矩阵在独立 jobs 中执行。
+- MySQL 8.4 与 MariaDB 10.11/11.4/11.8/12.3 finance integration：每个矩阵 job 的 23 tests、23 pass、0 fail、0 skipped；另外 session-token migration、Telegram outbox/migration 等独立集成子测试均 success。
+- Daily Security and Quality Audit run `45526485339`：Dependencies and regression suite 与 CodeQL 均 success；本次 npm audit 两次输出均为 `found 0 vulnerabilities`。CodeQL 扫描 315/315 JavaScript、11/11 HTML 文件，SARIF upload 完成，job success。
+- Installer Compatibility run `45526485361`：Debian 12/13、Ubuntu 22.04/24.04/26.04 全部 success。
+- 因此 PR #41 squash merge 后 main SHA `0e806d9ecfb6d453330ce74dd4de43e49fd0fd03` 的 post-merge CI、数据库矩阵、Daily Security and Quality Audit/CodeQL 与安装矩阵全部完成并成功。该结果只证明自动化验证，不等于真实生产支付、设备或灾备验收。
