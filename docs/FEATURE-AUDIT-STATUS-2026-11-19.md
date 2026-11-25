@@ -595,3 +595,12 @@
 4. 增加浏览器 E2E：扫码点餐 → KDS → 收银结算 → 退款；扩展跨租户/门店 IDOR 测试覆盖订单、退款、菜单、打印、Socket.IO、导出。
 5. 获得 provider sandbox 与财务审批后再完成 PayWay/Bakong callback、退款、订单与总账闭环；完成 Telegram staging、生产备份恢复/RPO/RTO 和多节点故障注入。
 6. 对 157/79/6 静态候选逐项取证，禁止直接批量删除。
+
+
+#### 16.1 PR #41 合并后验证进度（2026-11-25 08:34）
+
+- main SHA `0e806d9ecfb6d453330ce74dd4de43e49fd0fd03` 的 CI `validate` job 已 success：831 tests、805 pass、0 fail、26 skipped；生产依赖审计输出 `found 0 vulnerabilities`。26 项 skipped 是未在通用 validate job 配置 MySQL integration URL 的数据库集成测试。
+- CI run `45526485340`：MySQL finance integration 已 success；MariaDB 10.11/11.4/11.8/12.3 jobs 仍 in progress。validate 已 success。
+- Installer run `45526485361`：Debian 12/13、Ubuntu 24.04/26.04 已 success；Ubuntu 22.04 仍 in progress。
+- Daily Audit run `45526485339`：Dependencies/regression 与 CodeQL jobs 仍 in progress。尚未报告本日完整 npm audit、CodeQL 和回归结果。
+- PR #42（本审计文档更新）head SHA 在本补充提交后需重新核验其检查；该 PR 保持 Draft，不直接合并 main。
