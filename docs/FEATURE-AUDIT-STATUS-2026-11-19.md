@@ -538,3 +538,60 @@
 3. 完成 Telegram 多商户 staging、生产备份恢复演练/RPO/RTO 和 Redis 多节点故障注入。
 4. 由仓库管理员启用 main branch protection / rulesets，并验证 required checks 生效。
 5. 人工分类静态审计候选，不按启发式结果直接删除。
+
+
+## 16. 2026-11-25 每日全面审计（Asia/Phnom Penh 08:31）
+
+本节记录今日审计快照；旧章节中的 SHA、PR 数量和状态均为历史记录，当前状态以本节和 GitHub 实时结果为准。此更新在独立 PR 中提交，不直接写入 main。
+
+### main 与合并记录
+
+- 本次审计开始时最新 main：`0e806d9ecfb6d453330ce74dd4de43e49fd0fd03`。
+- PR #41（`style(cashier): consolidate order tag CSS）已 squash merge，合并提交：`0e806d9ecfb6d453330ce74dd4de43e49fd0fd03`；PR head：`84b4b19145c63e8f1c73db6c8756468c9ac20ef5`。
+- PR #41 仅变更 `assets/cashier.css` 与 `tests/cashier-order-card-tags-css.test.js`：将重复的订单标签 CSS 合并为唯一规则，保留 `margin-top: 8px`、`width: 100%`、flex/wrap，并补充静态回归测试；没有支付/订单业务规则、数据库迁移或生产凭据变更。
+- PR #41 merge 前 head SHA 的 CI、Daily Security and Quality Audit、Installer Compatibility 均成功：CI run `45343831859`、Audit run `45343831775`、Installer run `45343831809`。
+- 合并后 main 同 SHA 的工作流正在运行，不能用 PR head 检查替代：
+  - CI run `45526485340`：validate 与 MariaDB 10.11/11.4/11.8/12.3 jobs 仍运行；MySQL integration job 已成功。
+  - Daily Security and Quality Audit run `45526485339`：Dependencies/regression 与 CodeQL jobs 仍运行。
+  - Installer Compatibility run `45526485361`：Debian 12/13、Ubuntu 22.04/24.04/26.04 jobs 仍运行。
+- 合并后检查尚未全部完成，故本节写入时不能确认 main 的 post-merge CI/security/installer 完整通过。
+
+### PR / Issue 状态
+
+- 开放 PR：#19（Draft，旧审计文档）、#33（admin 1024px CSS）、#36（super dashboard unused CSS）、#37（admin unused form/tab-icon CSS）。
+- PR #33、#36、#37 当前 head 的 CI、Audit、Installer 检查历史结果均为 success；但它们的 base SHA 仍是合并 PR #41 前的 `a315a710222a6d8c9b739073fb215455d9c1ccec`。需要刷新/更新基线并重新验证；不以旧 base 检查直接合并。
+- PR #37 的 GitHub mergeable 状态为 false，需解决冲突/不可合并状态后再验证。PR #19 仍为 Draft，不推进合并。
+- 当前开放 issue：0。
+
+### 依赖、安全与静态审计证据
+
+- 最新完成的完整每日审计仍是 2026-11-24 run `45377977891`，针对 main SHA `a315a710222a6d8c9b739073fb215455d9c1ccec`。其 Dependencies and regression suite 与 CodeQL jobs 均 success。
+- 该每日审计的 `npm audit` / `npm audit --audit-level=moderate` 输出：`found 0 vulnerabilities`。这是 2026-11-24 的扫描结果，不是 2026-11-25 新扫描。
+- 2026-11-24 Node 测试：830 tests、804 pass、0 fail、26 skipped。26 项是通用 job 未设置 `MYSQL_INTEGRATION_URL` 的数据库测试；独立 MySQL/MariaDB 集成矩阵负责相应数据库覆盖。
+- 2026-11-24 CodeQL job success；本次 invocation 扫描 314/314 JavaScript 文件及 11/11 HTML 文件，SARIF 上传成功。不能据此声称 GitHub 当前全部 code-scanning alerts 已清零。
+- 静态审计启发式警告：157 个疑似未用 i18n key、79 个疑似未用 CSS class、6 个疑似未用 `window.xxx` 导出。未人工确认前不批量删除；这些不是已确认缺陷或本日重新计算结果。
+- CI Redis 容器日志提示 `vm.overcommit_memory` 未启用及使用默认 Redis 配置；另有 CodeQL cache reservation warning。它们是测试环境/缓存警告，未导致该审计失败，不代表已验证生产 Redis 配置。
+- Dependabot 的 weekly npm / GitHub Actions 更新配置存在；但本次连接无法读取 Dependabot alerts 与 code-scanning alerts 的实时列表（接口权限/可访问性受限），因此告警总数状态为未知，不能报告为零。
+- 2026-11-25 main post-merge Daily Audit 尚未完成；需等 run `45526485339` 结束后才能报告当日扫描与回归结果。
+
+### 治理风险（高优先级）
+
+- main 分支 API 返回 `protected=false`；仓库 rulesets 查询返回空列表。Branch-protection 读取接口对当前 GitHub 连接返回 403（权限不足）。
+- **main 分支保护尚未启用/无法验证生效**。需要仓库管理员设置 PR-only、required checks（CI validate、MySQL/MariaDB 集成、CodeQL/依赖审计、Debian/Ubuntu installer matrix）、禁止 force-push 与删除。当前不得宣称 main 已受保护。
+
+### 功能状态与生产验收阻塞
+
+- 顾客扫码点餐、服务员、KDS、收银/退款、商户/门店隔离、财务对账/月结等有代码与细粒度自动化测试证据，但缺真实浏览器端完整旅程、设备、门店及生产验收。
+- PayWay/Bakong/KHQR：验证 helper/adapters 与测试存在；生产 callback ingress、verified-event processor、自动订单结算、退款回调和自动总账过账仍需 provider sandbox、真实凭据、账户映射与财务确认。没有在本轮改动或自动验证业务规则。
+- Telegram outbox/webhook 代码有测试，worker 默认关闭；真实 bot、multi-merchant staging 与恢复验收仍阻塞。
+- MySQL/MariaDB 自动化迁移/财务/备份恢复测试有历史证据；未执行生产迁移、生产备份恢复演练或 RPO/RTO 签收。
+- 浏览器 E2E、覆盖率门槛、生产 APM/告警、真实打印设备、多节点故障注入仍未验收。未报告虚构的功能完成百分比。
+
+### 下一批优先项
+
+1. 完成 PR #41 merge 后 main SHA `0e806d9ecfb6d453330ce74dd4de43e49fd0fd03` 的 CI、Daily Security and Quality Audit、Installer Compatibility 同 SHA 验证。
+2. 更新 PR #33/#36 的 base 并重新跑完整检查；解决 PR #37 的 mergeability blocker；对过期 Draft PR #19 重新核对文档事实。
+3. 请求管理员启用 main branch protection/rulesets 并验证 required checks。
+4. 增加浏览器 E2E：扫码点餐 → KDS → 收银结算 → 退款；扩展跨租户/门店 IDOR 测试覆盖订单、退款、菜单、打印、Socket.IO、导出。
+5. 获得 provider sandbox 与财务审批后再完成 PayWay/Bakong callback、退款、订单与总账闭环；完成 Telegram staging、生产备份恢复/RPO/RTO 和多节点故障注入。
+6. 对 157/79/6 静态候选逐项取证，禁止直接批量删除。
