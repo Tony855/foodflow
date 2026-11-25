@@ -604,3 +604,11 @@
 - Installer run `45526485361`：Debian 12/13、Ubuntu 24.04/26.04 已 success；Ubuntu 22.04 仍 in progress。
 - Daily Audit run `45526485339`：Dependencies/regression 与 CodeQL jobs 仍 in progress。尚未报告本日完整 npm audit、CodeQL 和回归结果。
 - PR #42（本审计文档更新）head SHA 在本补充提交后需重新核验其检查；该 PR 保持 Draft，不直接合并 main。
+
+
+#### 16.2 Main post-merge audit/security/installer 已完成（2026-11-25 08:35）
+
+- Daily Security and Quality Audit run `45526485339`（同 SHA `0e806d9ecfb6d453330ce74dd4de43e49fd0fd03`）：Dependencies and regression suite = success；CodeQL static security analysis = success。
+- Installer Compatibility run `45526485361`：Debian 12、Debian 13、Ubuntu 22.04、Ubuntu 24.04、Ubuntu 26.04 全部 success。
+- Main CI run `45526485340`：validate、MySQL integration、MariaDB 11.8、12.3 已 success；MariaDB 10.11 与 11.4 仍 in progress。CI 数据库矩阵尚未全完成。
+- 因此 main 同 SHA 的完整 CI（包括 MariaDB 10.11/11.4）仍待完成；不可提前宣告全部 post-merge CI 成功。
