@@ -267,12 +267,7 @@ body {
   color: var(--pos-text-light);
 }
 
-.pos-order-card-tags {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  margin-top: 6px;
-}
+
 .pos-tag {
   display: inline-block;
   padding: 2px 8px;
