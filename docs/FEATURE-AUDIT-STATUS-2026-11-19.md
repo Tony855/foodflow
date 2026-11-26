@@ -672,7 +672,7 @@
 ### main 分支保护 / rulesets — 高优先级治理风险
 
 - 最近直接可核实的 branch protection 读数为 disabled/`protected=false`（2026-11-25）；本轮 branch-protection 端点仍无法通过当前连接读取（403 权限限制）。
-- 本轮 Rulesets API 未返回可验证的启用规则（最近直接读数为空列表）；无法确认 required checks 强制生效。
+- 本轮未取得新的 Rulesets API 读取；最近可核实的直接读数为空列表，无法确认 required checks 强制生效。
 - **高优先级风险：main 保护未启用或无法验证生效。** 管理员需配置 PR-only、required checks（validate、MySQL/MariaDB 矩阵、完整依赖/回归、CodeQL、五种安装环境）、禁止 force-push 和删除，并在启用后重新读取确认。不得声称 main 已受保护。
 
 ### 下一批优先项
