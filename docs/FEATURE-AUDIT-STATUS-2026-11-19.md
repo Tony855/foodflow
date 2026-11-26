@@ -631,7 +631,7 @@
 ### 最新 main、合并与 Issues
 
 - 最新可核实 main SHA：`0e806d9ecfb6d453330ce74dd4de43e49fd0fd03`，本次 commit 搜索未发现更新提交。
-- PR #41 已 squash merge；merge commit 为上述 SHA。其 post-merge CI、MySQL 8.4、MariaDB 10.11/11.4/11.8/12.3、CodeQL/依赖审计与五种安装兼容测试均已于 2025-11-25（实际为 2026-11-25）完成成功。此处以 PR #41 合并后同 SHA run 记录为证据。
+- PR #41 已 squash merge；merge commit 为上述 SHA。其 post-merge CI、MySQL 8.4、MariaDB 10.11/11.4/11.8/12.3、CodeQL/依赖审计与五种安装兼容测试均已于 2026-11-25 完成成功。此处以 PR #41 合并后同 SHA run 记录为证据。
 - 开放 PR：#42（本审计记录 Draft）、#33（admin 1024px CSS）、#36（super dashboard CSS cleanup）、#37（admin CSS cleanup，mergeable=false）、#19（旧审计文档 Draft）。
 - GitHub issue 查询本轮返回 0 个开放 Issue；搜索 API 未返回条目。
 - PR #33、#36、#37、#19 相对最新 main 均已分叉/落后：#33 behind 6、ahead 2；#36 behind 4、ahead 6；#37 behind 4、ahead 3；#19 behind 17、ahead 1。PR #33/#36/#37 的旧 head checks 虽已成功，但这些分支未基于当前 main 重建检查，故本轮不合并；#37 mergeable=false。#19 仍 Draft。
