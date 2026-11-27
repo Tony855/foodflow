@@ -35,7 +35,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .stat-card .stat-content { flex: 1; min-width: 0; }
 .stat-card .label { color: #999; font-size: 13px; margin-bottom: 4px; }
 .stat-card .value { font-size: 28px; font-weight: 700; color: #fff; }
-.stat-card .unit { font-size: 14px; color: #888; margin-left: 4px; }
 .stats-today { grid-template-columns: 1fr; }
 
 .server-monitor { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
@@ -180,7 +179,6 @@ select:focus { outline: none; border-color: #e85d3a !important; }
 
 .lang-select { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15); color: #fff; padding: 6px 10px; border-radius: 8px; font-size: 13px; cursor: pointer; outline: none; }
 .lang-select option { color: #333; }
-.login-lang-select { width: 100%; margin-top: 12px; text-align: center; }
 
 /* ============================================================
    Extracted from super.html on 2026-10-02
