@@ -538,3 +538,147 @@
 3. 完成 Telegram 多商户 staging、生产备份恢复演练/RPO/RTO 和 Redis 多节点故障注入。
 4. 由仓库管理员启用 main branch protection / rulesets，并验证 required checks 生效。
 5. 人工分类静态审计候选，不按启发式结果直接删除。
+
+
+## 16. 2026-11-25 每日全面审计（Asia/Phnom Penh 08:31）
+
+本节记录今日审计快照；旧章节中的 SHA、PR 数量和状态均为历史记录，当前状态以本节和 GitHub 实时结果为准。此更新在独立 PR 中提交，不直接写入 main。
+
+### main 与合并记录
+
+- 本次审计开始时最新 main：`0e806d9ecfb6d453330ce74dd4de43e49fd0fd03`。
+- PR #41（`style(cashier): consolidate order tag CSS）已 squash merge，合并提交：`0e806d9ecfb6d453330ce74dd4de43e49fd0fd03`；PR head：`84b4b19145c63e8f1c73db6c8756468c9ac20ef5`。
+- PR #41 仅变更 `assets/cashier.css` 与 `tests/cashier-order-card-tags-css.test.js`：将重复的订单标签 CSS 合并为唯一规则，保留 `margin-top: 8px`、`width: 100%`、flex/wrap，并补充静态回归测试；没有支付/订单业务规则、数据库迁移或生产凭据变更。
+- PR #41 merge 前 head SHA 的 CI、Daily Security and Quality Audit、Installer Compatibility 均成功：CI run `45343831859`、Audit run `45343831775`、Installer run `45343831809`。
+- 合并后 main 同 SHA 的工作流正在运行，不能用 PR head 检查替代：
+  - CI run `45526485340`：validate 与 MariaDB 10.11/11.4/11.8/12.3 jobs 仍运行；MySQL integration job 已成功。
+  - Daily Security and Quality Audit run `45526485339`：Dependencies/regression 与 CodeQL jobs 仍运行。
+  - Installer Compatibility run `45526485361`：Debian 12/13、Ubuntu 22.04/24.04/26.04 jobs 仍运行。
+- 合并后检查尚未全部完成，故本节写入时不能确认 main 的 post-merge CI/security/installer 完整通过。
+
+### PR / Issue 状态
+
+- 开放 PR：#19（Draft，旧审计文档）、#33（admin 1024px CSS）、#36（super dashboard unused CSS）、#37（admin unused form/tab-icon CSS）。
+- PR #33、#36、#37 当前 head 的 CI、Audit、Installer 检查历史结果均为 success；但它们的 base SHA 仍是合并 PR #41 前的 `a315a710222a6d8c9b739073fb215455d9c1ccec`。需要刷新/更新基线并重新验证；不以旧 base 检查直接合并。
+- PR #37 的 GitHub mergeable 状态为 false，需解决冲突/不可合并状态后再验证。PR #19 仍为 Draft，不推进合并。
+- 当前开放 issue：0。
+
+### 依赖、安全与静态审计证据
+
+- 最新完成的完整每日审计仍是 2026-11-24 run `45377977891`，针对 main SHA `a315a710222a6d8c9b739073fb215455d9c1ccec`。其 Dependencies and regression suite 与 CodeQL jobs 均 success。
+- 该每日审计的 `npm audit` / `npm audit --audit-level=moderate` 输出：`found 0 vulnerabilities`。这是 2026-11-24 的扫描结果，不是 2026-11-25 新扫描。
+- 2026-11-24 Node 测试：830 tests、804 pass、0 fail、26 skipped。26 项是通用 job 未设置 `MYSQL_INTEGRATION_URL` 的数据库测试；独立 MySQL/MariaDB 集成矩阵负责相应数据库覆盖。
+- 2026-11-24 CodeQL job success；本次 invocation 扫描 314/314 JavaScript 文件及 11/11 HTML 文件，SARIF 上传成功。不能据此声称 GitHub 当前全部 code-scanning alerts 已清零。
+- 静态审计启发式警告：157 个疑似未用 i18n key、79 个疑似未用 CSS class、6 个疑似未用 `window.xxx` 导出。未人工确认前不批量删除；这些不是已确认缺陷或本日重新计算结果。
+- CI Redis 容器日志提示 `vm.overcommit_memory` 未启用及使用默认 Redis 配置；另有 CodeQL cache reservation warning。它们是测试环境/缓存警告，未导致该审计失败，不代表已验证生产 Redis 配置。
+- Dependabot 的 weekly npm / GitHub Actions 更新配置存在；但本次连接无法读取 Dependabot alerts 与 code-scanning alerts 的实时列表（接口权限/可访问性受限），因此告警总数状态为未知，不能报告为零。
+- 2026-11-25 main post-merge Daily Audit 尚未完成；需等 run `45526485339` 结束后才能报告当日扫描与回归结果。
+
+### 治理风险（高优先级）
+
+- main 分支 API 返回 `protected=false`；仓库 rulesets 查询返回空列表。Branch-protection 读取接口对当前 GitHub 连接返回 403（权限不足）。
+- **main 分支保护尚未启用/无法验证生效**。需要仓库管理员设置 PR-only、required checks（CI validate、MySQL/MariaDB 集成、CodeQL/依赖审计、Debian/Ubuntu installer matrix）、禁止 force-push 与删除。当前不得宣称 main 已受保护。
+
+### 功能状态与生产验收阻塞
+
+- 顾客扫码点餐、服务员、KDS、收银/退款、商户/门店隔离、财务对账/月结等有代码与细粒度自动化测试证据，但缺真实浏览器端完整旅程、设备、门店及生产验收。
+- PayWay/Bakong/KHQR：验证 helper/adapters 与测试存在；生产 callback ingress、verified-event processor、自动订单结算、退款回调和自动总账过账仍需 provider sandbox、真实凭据、账户映射与财务确认。没有在本轮改动或自动验证业务规则。
+- Telegram outbox/webhook 代码有测试，worker 默认关闭；真实 bot、multi-merchant staging 与恢复验收仍阻塞。
+- MySQL/MariaDB 自动化迁移/财务/备份恢复测试有历史证据；未执行生产迁移、生产备份恢复演练或 RPO/RTO 签收。
+- 浏览器 E2E、覆盖率门槛、生产 APM/告警、真实打印设备、多节点故障注入仍未验收。未报告虚构的功能完成百分比。
+
+### 下一批优先项
+
+1. 完成 PR #41 merge 后 main SHA `0e806d9ecfb6d453330ce74dd4de43e49fd0fd03` 的 CI、Daily Security and Quality Audit、Installer Compatibility 同 SHA 验证。
+2. 更新 PR #33/#36 的 base 并重新跑完整检查；解决 PR #37 的 mergeability blocker；对过期 Draft PR #19 重新核对文档事实。
+3. 请求管理员启用 main branch protection/rulesets 并验证 required checks。
+4. 增加浏览器 E2E：扫码点餐 → KDS → 收银结算 → 退款；扩展跨租户/门店 IDOR 测试覆盖订单、退款、菜单、打印、Socket.IO、导出。
+5. 获得 provider sandbox 与财务审批后再完成 PayWay/Bakong callback、退款、订单与总账闭环；完成 Telegram staging、生产备份恢复/RPO/RTO 和多节点故障注入。
+6. 对 157/79/6 静态候选逐项取证，禁止直接批量删除。
+
+
+#### 16.1 PR #41 合并后验证进度（2026-11-25 08:34）
+
+- main SHA `0e806d9ecfb6d453330ce74dd4de43e49fd0fd03` 的 CI `validate` job 已 success：831 tests、805 pass、0 fail、26 skipped；生产依赖审计输出 `found 0 vulnerabilities`。26 项 skipped 是未在通用 validate job 配置 MySQL integration URL 的数据库集成测试。
+- CI run `45526485340`：MySQL finance integration 已 success；MariaDB 10.11/11.4/11.8/12.3 jobs 仍 in progress。validate 已 success。
+- Installer run `45526485361`：Debian 12/13、Ubuntu 24.04/26.04 已 success；Ubuntu 22.04 仍 in progress。
+- Daily Audit run `45526485339`：Dependencies/regression 与 CodeQL jobs 仍 in progress。尚未报告本日完整 npm audit、CodeQL 和回归结果。
+- PR #42（本审计文档更新）head SHA 在本补充提交后需重新核验其检查；该 PR 保持 Draft，不直接合并 main。
+
+
+#### 16.2 Main post-merge audit/security/installer 已完成（2026-11-25 08:35）
+
+- Daily Security and Quality Audit run `45526485339`（同 SHA `0e806d9ecfb6d453330ce74dd4de43e49fd0fd03`）：Dependencies and regression suite = success；CodeQL static security analysis = success。
+- Installer Compatibility run `45526485361`：Debian 12、Debian 13、Ubuntu 22.04、Ubuntu 24.04、Ubuntu 26.04 全部 success。
+- Main CI run `45526485340`：validate、MySQL integration、MariaDB 11.8、12.3 已 success；MariaDB 10.11 与 11.4 仍 in progress。CI 数据库矩阵尚未全完成。
+- 因此 main 同 SHA 的完整 CI（包括 MariaDB 10.11/11.4）仍待完成；不可提前宣告全部 post-merge CI 成功。
+
+
+#### 16.3 PR #41 合并后 main 全部 CI / 数据库矩阵完成（2026-11-25 08:36）
+
+- main CI run `45526485340` 同 SHA `0e806d9ecfb6d453330ce74dd4de43e49fd0fd03` 的全部 jobs 已 success：validate、MySQL integration、MariaDB 10.11/11.4/11.8/12.3。
+- validate：831 tests、805 pass、0 fail、26 skipped；生产依赖审计 `found 0 vulnerabilities`。26 项 skipped 的通用 job 缺少 MySQL integration URL，数据库矩阵在独立 jobs 中执行。
+- MySQL 8.4 与 MariaDB 10.11/11.4/11.8/12.3 finance integration：每个矩阵 job 的 23 tests、23 pass、0 fail、0 skipped；另外 session-token migration、Telegram outbox/migration 等独立集成子测试均 success。
+- Daily Security and Quality Audit run `45526485339`：Dependencies and regression suite 与 CodeQL 均 success；本次 npm audit 两次输出均为 `found 0 vulnerabilities`。CodeQL 扫描 315/315 JavaScript、11/11 HTML 文件，SARIF upload 完成，job success。
+- Installer Compatibility run `45526485361`：Debian 12/13、Ubuntu 22.04/24.04/26.04 全部 success。
+- 因此 PR #41 squash merge 后 main SHA `0e806d9ecfb6d453330ce74dd4de43e49fd0fd03` 的 post-merge CI、数据库矩阵、Daily Security and Quality Audit/CodeQL 与安装矩阵全部完成并成功。该结果只证明自动化验证，不等于真实生产支付、设备或灾备验收。
+
+
+## 17. 2026-11-26 每日全面审计（Asia/Phnom Penh 08:35）
+
+本节记录 2026-11-26 可核实的 GitHub 数据、PR head 检查与代码/测试证据。未取得的管理端、生产环境和 scheduled-run 证据明确标为未知；本更新仍通过独立 PR，不直接推送 main。
+
+### 最新 main、合并与 Issues
+
+- 最新可核实 main SHA：`0e806d9ecfb6d453330ce74dd4de43e49fd0fd03`，本次 commit 搜索未发现更新提交。
+- PR #41 已 squash merge；merge commit 为上述 SHA。其 post-merge CI、MySQL 8.4、MariaDB 10.11/11.4/11.8/12.3、CodeQL/依赖审计与五种安装兼容测试均已于 2026-11-25 完成成功。此处以 PR #41 合并后同 SHA run 记录为证据。
+- 开放 PR：#42（本审计记录 Draft）、#33（admin 1024px CSS）、#36（super dashboard CSS cleanup）、#37（admin CSS cleanup，mergeable=false）、#19（旧审计文档 Draft）。
+- GitHub issue 查询本轮返回 0 个开放 Issue；搜索 API 未返回条目。
+- PR #33、#36、#37、#19 相对最新 main 均已分叉/落后：#33 behind 6、ahead 2；#36 behind 4、ahead 6；#37 behind 4、ahead 3；#19 behind 17、ahead 1。PR #33/#36/#37 的旧 head checks 虽已成功，但这些分支未基于当前 main 重建检查，故本轮不合并；#37 mergeable=false。#19 仍 Draft。
+
+### PR #42 当前 head 的验证（本次更新前）
+
+- PR #42 head：`bf5a45e10a51f936a8bebb753fc4808a407d093f`；Draft，mergeable=true，diff 仅修改审计文档。
+- CI run `45526774674`：validate、MySQL integration、MariaDB 10.11/11.4/11.8/12.3 jobs 全部 success。
+- Daily Security and Quality Audit run `45526774729`：Dependencies and regression suite、CodeQL static security analysis 全部 success。
+- Installer Compatibility run `45526774644`：Debian 12/13、Ubuntu 22.04/24.04/26.04 全部 success。
+- 该 head 的完整依赖审计输出 `found 0 vulnerabilities`（两次 npm audit）；Node suite 831 tests、805 pass、0 fail、26 skipped。26 项是通用测试任务未设置 `MYSQL_INTEGRATION_URL` 的数据库测试；独立 MySQL/MariaDB 矩阵另行执行。
+- CodeQL 日志显示本次 code-scanning workflow 未发现问题并成功上传 SARIF；这不等于 GitHub 当前所有 Dependabot/code-scanning alert 清单已独立清零，实时 alerts 列表仍无法读取。
+- PR #42 的 head checks 完成且成功，但本节更新会改变 head SHA，旧结果不能用于新 head 的合并判定。
+
+### 认证授权、租户隔离、订单/KHQR/退款与财务一致性
+
+- 本轮读取 main 的相关测试文件：`tests/auth-store-scope.test.js`、`tests/order-store-scope.test.js`、`tests/financial-reconciliation-object-authorization.test.js`。这些测试验证失效商户/门店 session fail closed、订单 scope 不依赖伪造 store ID、财务 reconciliation item/alert/exception 跨租户 ID 猜测拒绝且无业务/审计写入、month-close 和 journal export 使用认证租户/actor context。
+- PR #42 的完整回归日志也包含 KHQR retry/idempotency、已发行 QR guard、并发状态变化拒绝、事务/审计 rollback、token 不回显、扫描 session rate-limit fail closed 等测试通过记录。
+- 这些是自动化/静态测试证据，不是全站生产渗透测试或完整订单→支付→退款→总账真实闭环验收。PayWay/Bakong/KHQR 生产 callback ingress、verified-event processor、自动结算/过账及外部 provider sandbox 仍阻塞；未改变未经审批的支付规则。
+- 财务与迁移：MySQL/MariaDB integration jobs 有自动化证据；未执行生产数据库迁移、生产支付/退款或真实备份恢复演练。
+
+### 依赖、代码安全与安装兼容
+
+- PR #42 head 的 npm audit：0 vulnerabilities（head 变化后须重新验证）。
+- CodeQL workflow success；独立 Dependabot/code-scanning alerts inventory 本轮无法读取，告警数量未知。
+- Dependabot weekly npm 与 GitHub Actions 更新配置存在；本轮未读取可用的独立 Dependabot alerts 列表。
+- PR #42 head 的 CI 数据库矩阵与安装兼容矩阵均已成功；新 head 更新后必须重新运行。
+- Main 的 schedule-triggered run 列表当前无法由连接读取（workflow-run 查询仅返回 PR-triggered runs）；因此不声称 2026-11-26 main schedule run 已成功。PR audit run 结果与 main schedule 结果不可互换。
+
+### 静态警告与功能状态
+
+- 最近可核实的静态启发式候选仍是 157 个疑似未用 i18n key、79 个疑似未用 CSS class、6 个疑似未用 `window.xxx` 导出、174 个动态拼接候选（历史已识别误报）；本日未重新计算/人工逐项确认，不据此删除。
+- 核心点餐、桌台/服务员、KDS、收银/退款、租户/门店授权、财务对账/月结：代码及细粒度自动化测试有证据；真实浏览器 E2E、现场设备、跨租户全对象攻击测试与生产验收仍部分/阻塞。
+- Telegram outbox/webhook 有代码与测试，worker 默认关闭；真实 Bot、多商户 staging、失败恢复验收仍阻塞。
+- 数据库迁移、备份/恢复测试有 CI 证据；真实生产恢复/RPO/RTO 签收未完成。
+- 未计算或宣称虚构功能完成百分比。
+
+### main 分支保护 / rulesets — 高优先级治理风险
+
+- 最近直接可核实的 branch protection 读数为 disabled/`protected=false`（2026-11-25）；本轮 branch-protection 端点仍无法通过当前连接读取（403 权限限制）。
+- 本轮未取得新的 Rulesets API 读取；最近可核实的直接读数为空列表，无法确认 required checks 强制生效。
+- **高优先级风险：main 保护未启用或无法验证生效。** 管理员需配置 PR-only、required checks（validate、MySQL/MariaDB 矩阵、完整依赖/回归、CodeQL、五种安装环境）、禁止 force-push 和删除，并在启用后重新读取确认。不得声称 main 已受保护。
+
+### 下一批优先项
+
+1. 更新 PR #33/#36/#37 至最新 main 并重新运行完整 checks；解决 #37 mergeability；对 #19 重新核对事实并决定关闭/更新。
+2. 由管理员启用并验证 main branch protection/rulesets。
+3. 增加完整浏览器 E2E（扫码点餐→KDS→收银→退款）及跨租户对象级测试，涵盖订单、退款、菜单、打印、Socket.IO、导出。
+4. 在真实 provider sandbox 与财务审批后闭环 PayWay/Bakong/KHQR callback、退款、订单与总账；完成 Telegram staging、生产备份恢复/RPO/RTO、多节点故障注入。
+5. 静态候选逐项取证；未经确认不得批量删除。
