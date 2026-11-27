@@ -742,3 +742,13 @@
 4. 建立浏览器 E2E：扫码下单→KDS→收银→退款，扩展跨租户对象授权测试。
 5. 在支付方 sandbox 和财务审批可用后闭环 callback、退款和总账；完成 Telegram staging、生产备份恢复/RPO/RTO、多节点故障注入。
 6. 重新运行静态审计并对候选逐项取证，禁止按启发式结果批量删除。
+
+
+#### 18.1 PR #43 合并后的复核及 CSS 批次跟踪（2026-11-27 08:47）
+
+- PR #43（今日审计文档）head `08fb507bba40e4a0766d4aec18e8a8c8c30b781b` 的 CI `45924202239`、Daily Security and Quality Audit `45924202212`、Installer Compatibility `45924202202` 全部 success；PR #43 于 2026-11-27 01:45:57 UTC squash merge，main SHA 为 `b2eb432b79ac0b062b5ff87c1cf38951195f1964`。
+- PR #43 仅更新本审计文档，60 行新增；未改变业务、支付规则、schema/migration、生产凭据或生产配置。
+- PR #43 merge commit 的 main push post-merge CI run `45924436623`、Daily Security and Quality Audit `45924436606`、Installer Compatibility `45924436603` 本次读取时仍 in progress。尚未报告同 SHA post-merge 完整验证成功。
+- CSS cleanup 批次 PR #44：将 PR #33/#36/#37 的可安全 CSS cleanup 重新基于最新 main 组合，避免在旧分支直接合并。新 merge commit head `81b051749476f2c3a65f35bc73cbc6f0af413d42` 已将 main 文档提交纳入 PR branch；新 head checks 尚未完成/全部可见，PR 保持 Draft。
+- PR #44 变更仅涉及 admin/super CSS 与静态回归测试：1024px admin-modules duplicate rule consolidation、无 source consumer 的 tab-icon、login-lang-select、stat-card unit selector cleanup；不涉及业务/支付规则、schema/migration、凭据或生产配置。旧 PR #33/#36/#37 暂不关闭，待替代 PR 的最新 head 验证成功并合并后再标记 superseded。
+- 本次 branch protection/rulesets 读数仍无法验证；高优先级治理风险继续保留。
