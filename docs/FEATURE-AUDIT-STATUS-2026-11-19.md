@@ -822,3 +822,14 @@
 - Installer Compatibility push run `46092622795`：Debian 12、Debian 13、Ubuntu 22.04、24.04、26.04 全部 success。
 - 因此 main SHA `d3037c9e84bf86285358317601bd56a019376f11` 的 post-merge CI、数据库矩阵、每日依赖/回归/CodeQL 与安装兼容矩阵已完成并成功；自动化证据不等于真实生产支付、设备、渗透或灾备验收。
 - 本补充会更新 PR #45 head；新 head 的 CI、CodeQL、依赖审计、数据库矩阵和安装矩阵必须重新验证。PR #45 仍保持 Draft，未合并。
+
+
+#### 19.2 2026-11-28 静态审计重新计算（main SHA d3037c9）
+
+- 静态仓库审计的关键对账通过：8 个页面的 JS/HTML 对账；23/23 routes 已由 server.js 注册；48 services、7 middleware、3 db、7 config 模块均被引用；102 个前端 API 调用均可找到后端定义（静态识别 170 个后端定义）。
+- 多语言检查：中文 `zh.json` 1275 keys，静态引用 1002；静态未使用候选 157；174 个动态拼接候选被脚本标为误报。
+- CSS 静态检查：620 个定义、617 个 HTML/JS 引用，11 个拼接前缀，77 个疑似未使用 class（启发式候选，未逐项核实）。
+- window export 检查：6 个疑似未使用候选（未逐项核实）。
+- 以上数字来自今日 main push audit run `46092622799` 的已成功依赖/回归 job，已重新计算；未人工逐项核实候选，不据此批量删除。
+- CI/installer 测试容器日志出现非致命环境警告（Redis `vm.overcommit_memory`、容器 systemd 用户/组缺失、`update-alternatives` 未配置 my.cnf、`/etc/resolv.conf` busy）。相关 job 均 success；这些是测试容器环境警告，未确认是 FoodFlow 应用缺陷，生产服务器环境需另行验收。
+- 本补充会更新 PR #45 head；最新 head 的 CI、CodeQL、依赖审计、数据库矩阵和安装兼容测试需重新验证，PR #45 继续保持 Draft。
