@@ -811,3 +811,14 @@
 4. 增加完整浏览器 E2E 与跨租户对象攻击测试，涵盖扫码下单→KDS→收银→退款及订单、菜单、打印、Socket.IO、导出。
 5. 在 sandbox/财务审批可用后完成支付 callback、退款与总账闭环；完成 Telegram staging、生产备份恢复/RPO/RTO、多节点故障注入。
 6. 静态候选逐项取证；未经确认不得批量删除。
+
+
+#### 19.1 PR #44 main post-merge 验证完成（2026-11-28 08:21）
+
+- Main SHA `d3037c9e84bf86285358317601bd56a019376f11` 的 CI push run `46092622760` 全部 jobs success：validate、MySQL 8.4、MariaDB 10.11/11.4/11.8/12.3。
+- Validate：834 tests、808 pass、0 fail、26 skipped；26 项因通用 validate 未配置 `MYSQL_INTEGRATION_URL` 跳过，独立数据库矩阵另行执行。生产依赖审计输出 `found 0 vulnerabilities`。
+- MySQL 8.4 与 MariaDB 10.11/11.4/11.8/12.3 finance integration、session-token migration、backup/restore、Telegram outbox integration jobs 全部 success。
+- Daily Security and Quality Audit push run `46092622799`：Dependencies and regression suite 与 CodeQL static security analysis 均 success；完整 npm audit 两次输出 `found 0 vulnerabilities`，CodeQL SARIF 已成功上传。
+- Installer Compatibility push run `46092622795`：Debian 12、Debian 13、Ubuntu 22.04、24.04、26.04 全部 success。
+- 因此 main SHA `d3037c9e84bf86285358317601bd56a019376f11` 的 post-merge CI、数据库矩阵、每日依赖/回归/CodeQL 与安装兼容矩阵已完成并成功；自动化证据不等于真实生产支付、设备、渗透或灾备验收。
+- 本补充会更新 PR #45 head；新 head 的 CI、CodeQL、依赖审计、数据库矩阵和安装矩阵必须重新验证。PR #45 仍保持 Draft，未合并。
